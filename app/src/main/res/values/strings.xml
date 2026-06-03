@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">猪头助手</string>
+    <string name="btn_start_service">开始监听</string>
+    <string name="btn_stop_service">停止监听</string>
+    <string name="status_idle">🐷 等待唤醒…</string>
+    <string name="status_listening">🎤 聆听中…</string>
+    <string name="status_processing">🧠 思考中…</string>
+    <string name="status_speaking">🔊 回复中…</string>
+    <string name="status_error">❌ 出错了</string>
+    <string name="wake_word_hint">唤醒词：你好，猪头</string>
+    <string name="label_backend_cloud">云端 DeepSeek</string>
+    <string name="label_backend_local">本机 Ollama</string>
+    <string name="label_api_key">API Key</string>
+    <string name="label_base_url">Base URL</string>
+    <string name="label_model">Model</string>
+    <string name="notification_channel">猪头助手</string>
+    <string name="notification_listening">正在后台监听唤醒词…</string>
+    <string name="sample_text">你好！我是猪头助手。打开后直接对我说话就行。</string>
+</resources>

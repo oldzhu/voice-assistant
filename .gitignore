@@ -1,0 +1,26 @@
+# Android / Gradle
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App-specific
+/app/release/
+*.jks
+*.keystore
+
+# Large model files (download separately)
+**/assets/vits-melo-tts-zh_en/
+**/assets/sherpa-onnx-vits-zh-ll/
+**/assets/sherpa-onnx-zipformer-ctc-small-zh-int8-*/
+**/assets/sherpa-onnx-streaming-zipformer-bilingual-zh-en-*/
+**/assets/vits-zh-aishell3.tar.bz2

@@ -1,0 +1,506 @@
+package com.example.voiceassistant
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Intent
+import android.media.AudioManager
+import android.os.Binder
+import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.lifecycleScope
+import com.example.voiceassistant.config.ConfigManager
+import com.example.voiceassistant.llm.CloudLLMBackend
+import com.example.voiceassistant.llm.LLMBackend
+import com.example.voiceassistant.llm.LocalLLMBackend
+import com.example.voiceassistant.speech.SherpaAsrEngine
+import com.example.voiceassistant.speech.SherpaTtsEngine
+import com.example.voiceassistant.speech.SystemTtsEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+class VoiceService : Service(), LifecycleOwner {
+
+    companion object {
+        private const val TAG = "VoiceService"
+        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "voice_assistant_channel"
+        private const val HISTORY_MAX_SIZE = 20
+        private const val PAUSE_BEFORE_LISTEN_MS = 1500L
+        private const val LISTEN_RESTART_DELAY_MS = 2000L
+        const val ACTION_TEST_TTS = "com.example.voiceassistant.TEST_TTS"
+        const val TEST_TEXT = "我是猪头您的手机个人语音助手"
+        private const val MAX_TEST_ATTEMPTS = 3
+    }
+
+    private fun debugLog(msg: String) {
+        Log.i(TAG, msg)
+        try {
+            val f = File(filesDir, "debug.log")
+            val sdf = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
+            FileWriter(f, true).use { it.write("${sdf.format(Date())} $msg\n") }
+        } catch (_: Exception) {}
+    }
+
+    enum class State { STOPPED, INITIALIZING, LISTENING, THINKING, SPEAKING }
+
+    private val binder = LocalBinder()
+    private lateinit var lifecycleRegistry: LifecycleRegistry
+    private lateinit var audioManager: AudioManager
+    private var asrEngine: SherpaAsrEngine? = null
+    private var ttsEngine: SherpaTtsEngine? = null
+    private var sysTtsEngine: SystemTtsEngine? = null
+    private var useSystemTts = false
+    private var llmBackend: LLMBackend? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+
+    @Volatile private var state: State = State.STOPPED
+    @Volatile private var initialized = false
+    private val conversationHistory = mutableListOf<LLMBackend.ChatMessage>()
+    private var stateChangeListener: ((State, String?) -> Unit)? = null
+
+    private val conversationLogFile by lazy { File(filesDir, "conversation.txt") }
+    private val backupDir by lazy { File(filesDir, "backups").also { it.mkdirs() } }
+
+    // Auto-test fields
+    private var testMode = false
+    private var testAttempt = 0
+
+    inner class LocalBinder : Binder() {
+        fun getService(): VoiceService = this@VoiceService
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        debugLog("===== onCreate =====")
+        lifecycleRegistry = LifecycleRegistry(this)
+        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+        audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "voiceassistant:wakelock")
+        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+        // Heavy model init on background thread
+        lifecycleScope.launch(Dispatchers.IO) {
+            initEngines()
+        }
+    }
+
+    private suspend fun initEngines() {
+        // Set up system TTS engine
+        sysTtsEngine = SystemTtsEngine(this@VoiceService).apply {
+            setCallbacks(
+                onStart = {
+                    updateState(State.SPEAKING)
+                },
+                onDone = {
+                    lifecycleScope.launch {
+                        delay(PAUSE_BEFORE_LISTEN_MS)
+                        startListening()
+                    }
+                },
+                onError = { err ->
+                    debugLog("System TTS error: $err")
+                    updateState(State.LISTENING)
+                    lifecycleScope.launch {
+                        delay(LISTEN_RESTART_DELAY_MS)
+                        startListening()
+                    }
+                }
+            )
+        }
+
+        // Try system TTS first (suspendCancellableCoroutine, no deadlock)
+        val rate = ConfigManager(this@VoiceService).speechRate
+        val sysOk = sysTtsEngine?.init(rate) ?: false
+        if (sysOk) {
+            useSystemTts = true
+            debugLog("System TTS ready, using phone's built-in engine")
+        } else {
+            debugLog("System TTS not available, falling back to sherpa-onnx")
+            initSherpaTts()
+        }
+
+        // Init ASR
+        debugLog("Initializing Sherpa ASR...")
+        asrEngine = SherpaAsrEngine(this@VoiceService).apply {
+            val ok = init(
+                onResult = { text ->
+                    debugLog("ASR result: '$text'")
+                    onSpeechRecognized(text)
+                },
+                onPartial = { partial ->
+                    debugLog("ASR partial: '$partial'")
+                },
+                onError = { err ->
+                    debugLog("ASR error: $err")
+                    if (state != State.STOPPED) {
+                        lifecycleScope.launch {
+                            delay(LISTEN_RESTART_DELAY_MS)
+                            startListening()
+                        }
+                    }
+                }
+            )
+            if (!ok) debugLog("Sherpa ASR init FAILED")
+            else debugLog("Sherpa ASR init OK")
+        }
+
+        // Init LLM backend
+        debugLog("Initializing LLM backend...")
+        llmBackend = createLLMBackend()
+        debugLog("LLM backend ready")
+
+        initialized = true
+        debugLog("Engines initialized, state=$state")
+
+        if (testMode) {
+            updateState(State.INITIALIZING)
+            lifecycleScope.launch {
+                delay(500)
+                runTtsTest()
+            }
+        } else {
+            updateState(State.LISTENING)
+            startListening()
+        }
+    }
+
+    private fun initSherpaTts() {
+        ttsEngine = SherpaTtsEngine(this@VoiceService).apply {
+            setCallbacks(
+                onStart = {
+                    asrEngine?.stop()
+                    updateState(State.SPEAKING)
+                },
+                onDone = {
+                    lifecycleScope.launch {
+                        delay(PAUSE_BEFORE_LISTEN_MS)
+                        startListening()
+                    }
+                },
+                onError = { err ->
+                    debugLog("TTS error in callback: $err")
+                    updateState(State.LISTENING)
+                    lifecycleScope.launch {
+                        delay(LISTEN_RESTART_DELAY_MS)
+                        startListening()
+                    }
+                }
+            )
+            val ok = init()
+            if (!ok) debugLog("Sherpa TTS init FAILED")
+            else debugLog("Sherpa TTS init OK")
+        }
+    }
+
+    private fun createLLMBackend(): LLMBackend {
+        val config = ConfigManager(this)
+        return if (config.backendType == ConfigManager.BACKEND_LOCAL) {
+            LocalLLMBackend(config.baseUrl, config.model)
+        } else {
+            CloudLLMBackend(config.apiKey, config.baseUrl, config.model)
+        }
+    }
+
+    private fun runTtsTest() {
+        if (!testMode) return
+        testAttempt++
+        debugLog("========== TTS TEST #$testAttempt ==========")
+        debugLog("TEST speaking test text...")
+        lifecycleScope.launch {
+            ttsEngine?.speakForTest(TEST_TEXT)
+        }
+    }
+
+    private fun onSpeechRecognized(text: String) {
+        if (text.isBlank()) return
+        if (testMode) {
+            onTestAsrResult(text)
+            return
+        }
+        updateState(State.THINKING, text)
+        lifecycleScope.launch {
+            processQuery(text)
+        }
+    }
+
+    private fun onTestAsrResult(recognized: String) {
+        debugLog("TEST recognized: '$recognized'")
+        val similarity = textSimilarity(TEST_TEXT, recognized)
+        debugLog("TEST similarity: $similarity%")
+        if (similarity >= 60) {
+            debugLog("========== TEST PASSED ($similarity%) ==========")
+            testMode = false
+            lifecycleScope.launch { delay(1000); startListening() }
+        } else if (testAttempt < MAX_TEST_ATTEMPTS) {
+            debugLog("========== TEST FAILED ($similarity%), retrying... ==========")
+            lifecycleScope.launch { delay(1500); runTtsTest() }
+        } else {
+            debugLog("========== TEST FAILED after $MAX_TEST_ATTEMPTS attempts ==========")
+            testMode = false
+            lifecycleScope.launch { delay(1000); startListening() }
+        }
+    }
+
+    private fun textSimilarity(a: String, b: String): Int {
+        val clean = { s: String -> s.replace(Regex("[^\\u4e00-\\u9fff]"), "") }
+        val ca = clean(a); val cb = clean(b)
+        if (ca.isEmpty() || cb.isEmpty()) return 0
+        val maxLen = maxOf(ca.length, cb.length)
+        val dist = levenshtein(ca, cb)
+        return ((maxLen - dist).toDouble() / maxLen * 100).toInt()
+    }
+
+    private fun levenshtein(a: String, b: String): Int {
+        val m = a.length; val n = b.length
+        val dp = Array(m + 1) { IntArray(n + 1) }
+        for (i in 0..m) dp[i][0] = i
+        for (j in 0..n) dp[0][j] = j
+        for (i in 1..m) for (j in 1..n)
+            dp[i][j] = minOf(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + if (a[i-1]==b[j-1]) 0 else 1)
+        return dp[m][n]
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        debugLog("===== onStartCommand ===== initialized=$initialized")
+        if (intent?.action == ACTION_TEST_TTS || intent?.getStringExtra("action") == "TEST_TTS") {
+            testMode = true; testAttempt = 0; debugLog("TEST MODE enabled")
+        }
+        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, createNotification())
+        wakeLock?.acquire(24 * 60 * 60 * 1000L)
+        if (initialized) {
+            state = State.LISTENING
+            startListening()
+        } else {
+            debugLog("Waiting for engine init...")
+            updateState(State.INITIALIZING)
+        }
+        return START_STICKY
+    }
+
+    private suspend fun speakTts(text: String) {
+        asrEngine?.stop()  // stop ASR before speaking to prevent self-loop
+        if (useSystemTts) sysTtsEngine?.speak(text)
+        else ttsEngine?.speak(text)
+    }
+
+    private fun stopTts() {
+        if (useSystemTts) sysTtsEngine?.stop()
+        else ttsEngine?.stop()
+    }
+
+    private fun releaseTts() {
+        if (useSystemTts) sysTtsEngine?.release()
+        else ttsEngine?.release()
+    }
+
+    override fun onDestroy() {
+        updateState(State.STOPPED)
+        asrEngine?.stop(); asrEngine?.release()
+        stopTts(); releaseTts()
+        try { wakeLock?.release() } catch (_: Exception) {}
+        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+        super.onDestroy()
+    }
+
+    private fun updateState(newState: State, message: String? = null) {
+        val old = state; state = newState
+        debugLog("State: $old → $newState")
+        if (newState != old) stateChangeListener?.invoke(newState, message)
+    }
+
+    private fun startListening() {
+        if (state == State.STOPPED) return
+        state = State.LISTENING
+        debugLog("startListening() called, state=LISTENING")
+        asrEngine?.startListening()
+    }
+
+    private suspend fun processQuery(text: String) {
+        val backend = llmBackend ?: run {
+            val msg = "请先在设置里填入API密钥"
+            debugLog("LLM backend null, TTS: $msg")
+            updateState(State.SPEAKING, msg)
+            speakTts(msg)
+            return
+        }
+        conversationHistory.add(LLMBackend.ChatMessage("user", text))
+        saveConversationLine("👤 用户", text)
+        updateState(State.THINKING)
+        try {
+            val result = withTimeoutOrNull(15000L) {
+                backend.chat(text, conversationHistory)
+            }
+            val response = when {
+                result == null -> null
+                result.isSuccess -> result.getOrNull()
+                else -> {
+                    debugLog("LLM error: ${result.exceptionOrNull()?.message}")
+                    null
+                }
+            }
+            if (response == null) {
+                val msg = "回复超时了"
+                debugLog("LLM timeout")
+                updateState(State.SPEAKING, msg)
+                speakTts(msg)
+                return
+            }
+            conversationHistory.add(LLMBackend.ChatMessage("assistant", response))
+            if (conversationHistory.size > HISTORY_MAX_SIZE) conversationHistory.removeAt(0)
+            saveConversationLine("🐷 猪头", response)
+            updateState(State.SPEAKING, response)
+            speakTts(response)
+        } catch (e: Exception) {
+            debugLog("LLM error: ${e.message}")
+            val msg = when {
+                e.message?.contains("timeout", true) == true -> "网络超时，再试一次"
+                e.message?.contains("401", true) == true -> "API密钥不对，检查设置"
+                e.message?.contains("429", true) == true -> "请求太频繁，等一下"
+                else -> "出了点问题，再试一次"
+            }
+            updateState(State.SPEAKING, msg)
+            speakTts(msg)
+        }
+    }
+
+    private fun saveConversationLine(speaker: String, text: String) {
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            conversationLogFile.appendText("[${sdf.format(Date())}] $speaker: $text\n")
+        } catch (_: Exception) {}
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID, "语音助手", NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "猪头助手前台服务"
+                setSound(null, null)
+            }
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createNotification(): Notification {
+        val pi = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val stateText = when (state) {
+            State.STOPPED -> "已停止"
+            State.INITIALIZING -> "初始化中..."
+            State.LISTENING -> "正在听..."
+            State.THINKING -> "思考中..."
+            State.SPEAKING -> "说话中..."
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("猪头助手")
+            .setContentText(stateText)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentIntent(pi)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
+    fun setStateChangeListener(listener: (State, String?) -> Unit) {
+        stateChangeListener = listener
+    }
+
+    fun pauseConversation() {
+        debugLog("pauseConversation called")
+        asrEngine?.stop()
+        stopTts()
+        updateState(State.STOPPED)
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
+    fun getCurrentState(): State = state
+
+    fun loadConversationLog(): String {
+        return try { conversationLogFile.readText() } catch (_: Exception) { "" }
+    }
+
+    fun switchBackend(isCloud: Boolean) {
+        lifecycleScope.launch {
+            llmBackend = createLLMBackend()
+            debugLog("Switched backend to ${if (isCloud) "cloud" else "local"}")
+        }
+    }
+
+    fun clearConversation() {
+        conversationHistory.clear()
+        try { conversationLogFile.writeText("") } catch (_: Exception) {}
+        debugLog("Conversation cleared")
+    }
+
+    fun setSpeechRate(rate: Float) {
+        ConfigManager(this).speechRate = rate
+        sysTtsEngine?.setSpeechRate(rate)
+    }
+
+    fun listBackups(): List<File> {
+        return backupDir.listFiles()?.filter { it.isFile && it.name.endsWith(".txt") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+
+    fun backupConversation(name: String) {
+        try {
+            val safe = name.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fff_\\-]"), "_")
+            val backup = File(backupDir, "backup_${safe}.txt")
+            conversationLogFile.copyTo(backup, overwrite = true)
+            debugLog("Backed up to ${backup.name}")
+        } catch (e: Exception) {
+            debugLog("Backup failed: ${e.message}")
+        }
+    }
+
+    /** Auto-generate timestamped backup, returns the backup File */
+    fun backupConversation(): File? {
+        return try {
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            val backup = File(backupDir, "backup_${sdf.format(Date())}.txt")
+            conversationLogFile.copyTo(backup, overwrite = true)
+            debugLog("Backed up to ${backup.name}")
+            backup
+        } catch (e: Exception) {
+            debugLog("Backup failed: ${e.message}")
+            null
+        }
+    }
+
+    fun restoreConversation(file: File): String {
+        return try {
+            val content = file.readText()
+            conversationLogFile.writeText(content)
+            debugLog("Restored from ${file.name}")
+            content
+        } catch (e: Exception) {
+            debugLog("Restore failed: ${e.message}")
+            ""
+        }
+    }
+}

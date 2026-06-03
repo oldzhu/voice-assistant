@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Background circle -->
+    <path
+        android:fillColor="#FF6B35"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+    <!-- Pig face (simple emoji-style) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,42m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M66,42m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    <path
+        android:fillColor="#333333"
+        android:pathData="M45,40m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#333333"
+        android:pathData="M63,40m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <!-- Snout -->
+    <path
+        android:fillColor="#FFAB91"
+        android:pathData="M47,58 Q54,68 61,58 Q54,62 47,58Z" />
+    <!-- Nostrils -->
+    <path
+        android:fillColor="#FF6B35"
+        android:pathData="M50,58m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillColor="#FF6B35"
+        android:pathData="M58,58m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <!-- Ears -->
+    <path
+        android:fillColor="#FF6B35"
+        android:pathData="M30,28 L38,18 L42,32 Z" />
+    <path
+        android:fillColor="#FF6B35"
+        android:pathData="M78,28 L70,18 L66,32 Z" />
+</vector>
