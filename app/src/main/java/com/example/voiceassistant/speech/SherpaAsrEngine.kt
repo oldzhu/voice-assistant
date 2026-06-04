@@ -15,16 +15,24 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Sherpa-ONNX offline speech recognition engine.
- * Uses VAD for speech detection + Zipformer CTC for recognition.
+ * Sherpa-ONNX offline streaming speech recognition engine.
+ * Uses OnlineRecognizer (Paraformer) with built-in endpoint detection.
+ *
+ * Model: sherpa-onnx-streaming-paraformer-bilingual-zh-en
+ *   - Bilingual Chinese + English
+ *   - Paraformer architecture, int8 quantized
+ *   - Streaming (real-time incremental results)
+ *   - Loaded via AssetManager
+ *
+ * NOTE: Zipformer transducer model (bilingual-zh-en-2023-02-20) fails with
+ * "protobuf parsing failed" on sherpa-onnx-jni v1.13.2. Paraformer works.
  */
 class SherpaAsrEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "SherpaAsrEngine"
         private const val SAMPLE_RATE = 16000
-        private const val MODEL_DIR = "sherpa-onnx-zipformer-ctc-small-zh-int8-2025-07-16"
-        private const val VAD_MODEL = "silero_vad.onnx"
+        private const val MODEL_DIR = "sherpa-onnx-streaming-paraformer-bilingual-zh-en"
     }
 
     private fun debugLog(msg: String) {
@@ -36,8 +44,7 @@ class SherpaAsrEngine(private val context: Context) {
         } catch (_: Exception) {}
     }
 
-    private var recognizer: OfflineRecognizer? = null
-    private var vad: Vad? = null
+    private var recognizer: OnlineRecognizer? = null
     private var audioRecord: AudioRecord? = null
     private var aec: AcousticEchoCanceler? = null
     private var recordingJob: Job? = null
@@ -58,46 +65,35 @@ class SherpaAsrEngine(private val context: Context) {
 
         return try {
             val modelDir = MODEL_DIR  // asset-relative
-            val vadModelPath = VAD_MODEL  // asset-relative
 
-            debugLog("Loading ASR model from assets: $modelDir")
+            debugLog("Loading ASR from assets: $modelDir")
 
-            // Create ASR recognizer
-            val asrConfig = OfflineRecognizerConfig(
+            val asrConfig = OnlineRecognizerConfig(
                 featConfig = FeatureConfig(
                     sampleRate = SAMPLE_RATE,
                     featureDim = 80,
                 ),
-                modelConfig = OfflineModelConfig(
-                    zipformerCtc = OfflineZipformerCtcModelConfig(
-                        model = "$modelDir/model.int8.onnx",
+                modelConfig = OnlineModelConfig(
+                    paraformer = OnlineParaformerModelConfig(
+                        encoder = "$modelDir/encoder.int8.onnx",
+                        decoder = "$modelDir/decoder.int8.onnx",
                     ),
                     tokens = "$modelDir/tokens.txt",
+                    numThreads = 1,
                     debug = true,
                     provider = "cpu",
-                    numThreads = 1,
+                    modelType = "zipformer",
                 ),
+                endpointConfig = EndpointConfig(
+                    rule1 = EndpointRule(false, 2.4f, 0.0f),
+                    rule2 = EndpointRule(true, 1.4f, 0.0f),
+                    rule3 = EndpointRule(false, 0.0f, 20.0f),
+                ),
+                enableEndpoint = true,
             )
 
-            recognizer = OfflineRecognizer(context.assets, asrConfig)
-            debugLog("ASR recognizer created")
-
-            // Create VAD
-            val vadConfig = VadModelConfig(
-                sileroVadModelConfig = SileroVadModelConfig(
-                    model = vadModelPath,
-                    threshold = 0.5f,
-                    minSilenceDuration = 0.5f,
-                    minSpeechDuration = 0.3f,
-                    maxSpeechDuration = 15f,
-                ),
-                sampleRate = SAMPLE_RATE,
-                numThreads = 1,
-                provider = "cpu",
-            )
-
-            vad = Vad(context.assets, vadConfig)
-            debugLog("VAD created")
+            recognizer = OnlineRecognizer(context.assets, asrConfig)
+            debugLog("OnlineRecognizer created (paraformer bilingual zh-en, int8)")
 
             true
         } catch (e: Exception) {
@@ -110,7 +106,7 @@ class SherpaAsrEngine(private val context: Context) {
 
     fun startListening() {
         if (isRunning) return
-        if (recognizer == null || vad == null) {
+        if (recognizer == null) {
             debugLog("startListening: engine not initialized")
             return
         }
@@ -141,7 +137,6 @@ class SherpaAsrEngine(private val context: Context) {
             audioRecord?.startRecording()
             debugLog("AudioRecord started, buffer=$bufferSize")
 
-            // Acoustic Echo Cancellation — prevent TTS feeding back into ASR
             try {
                 if (AcousticEchoCanceler.isAvailable()) {
                     aec = AcousticEchoCanceler.create(audioRecord!!.audioSessionId)
@@ -155,9 +150,9 @@ class SherpaAsrEngine(private val context: Context) {
             }
 
             recordingJob = CoroutineScope(Dispatchers.IO).launch {
-                processAudioLoop(bufferSize)
+                streamingRecognitionLoop(bufferSize)
             }
-            debugLog("Sherpa ASR listening started")
+            debugLog("Streaming ASR listening started")
         } catch (e: Exception) {
             debugLog("startListening failed: ${e.message}")
             onErrorCallback?.invoke("启动录音失败: ${e.message}")
@@ -165,50 +160,71 @@ class SherpaAsrEngine(private val context: Context) {
         }
     }
 
-    private suspend fun processAudioLoop(bufferSize: Int) {
+    private suspend fun streamingRecognitionLoop(bufferSize: Int) {
         val rec = recognizer ?: return
-        val v = vad ?: return
         val shortBuffer = ShortArray(bufferSize / 2)
+        var stream: OnlineStream? = null
+        var lastPartialText = ""
+        var hasSpeech = false
+
+        try {
+            stream = rec.createStream()
+        } catch (e: Exception) {
+            debugLog("Failed to create stream: ${e.message}")
+            isRunning = false
+            return
+        }
 
         while (isRunning) {
             val nread = audioRecord?.read(shortBuffer, 0, shortBuffer.size) ?: -1
             if (nread <= 0) continue
 
-            // Convert short[] to float[]
             val floatSamples = FloatArray(nread) { shortBuffer[it] / 32768f }
 
-            // Feed to VAD
-            v.acceptWaveform(floatSamples)
+            try {
+                stream.acceptWaveform(floatSamples, SAMPLE_RATE)
 
-            // Check for speech segments
-            while (!v.empty() && isRunning) {
-                val segment = v.front()
-                v.pop()
+                while (rec.isReady(stream)) {
+                    rec.decode(stream)
+                }
 
-                if (segment.samples.isNotEmpty()) {
-                    val text = recognizeSegment(rec, segment.samples)
-                    if (text.isNotBlank()) {
+                val result = rec.getResult(stream)
+                if (result.text != lastPartialText) {
+                    lastPartialText = result.text
+                    if (lastPartialText.isNotBlank()) {
+                        hasSpeech = true
                         withContext(Dispatchers.Main) {
-                            onResultCallback?.invoke(text)
+                            onPartialCallback?.invoke(lastPartialText)
                         }
                     }
                 }
+
+                // Only consider endpoint after actual speech detected
+                if (hasSpeech && rec.isEndpoint(stream)) {
+                    debugLog("Endpoint detected, finalizing...")
+                    stream.inputFinished()
+                    while (rec.isReady(stream)) {
+                        rec.decode(stream)
+                    }
+                    val finalResult = rec.getResult(stream)
+                    debugLog("Final result: '${finalResult.text}'")
+                    if (finalResult.text.isNotBlank()) {
+                        withContext(Dispatchers.Main) {
+                            onResultCallback?.invoke(finalResult.text)
+                        }
+                    }
+                    rec.reset(stream)
+                    lastPartialText = ""
+                    hasSpeech = false
+                }
+            } catch (e: Exception) {
+                debugLog("Recognition error: ${e.message}")
+                try { rec.reset(stream) } catch (_: Exception) {}
+                lastPartialText = ""
             }
         }
-    }
 
-    private fun recognizeSegment(rec: OfflineRecognizer, samples: FloatArray): String {
-        return try {
-            val stream = rec.createStream()
-            stream.acceptWaveform(samples, SAMPLE_RATE)
-            rec.decode(stream)
-            val result = rec.getResult(stream)
-            stream.release()
-            result.text
-        } catch (e: Exception) {
-            debugLog("recognizeSegment error: ${e.message}")
-            ""
-        }
+        try { stream.release() } catch (_: Exception) {}
     }
 
     fun stop() {
@@ -226,81 +242,15 @@ class SherpaAsrEngine(private val context: Context) {
         } catch (e: Exception) {
             debugLog("stop error: ${e.message}")
         }
-        vad?.reset()
-        debugLog("Sherpa ASR stopped")
+        debugLog("Streaming ASR stopped")
     }
 
     fun release() {
         stop()
         try { recognizer?.release() } catch (_: Exception) {}
-        try { vad?.release() } catch (_: Exception) {}
         recognizer = null
-        vad = null
-        debugLog("Sherpa ASR released")
+        debugLog("Streaming ASR released")
     }
 
     fun isActive(): Boolean = isRunning
-
-    /**
-     * Extract model directory from assets to internal storage.
-     */
-    private fun prepareModel(modelName: String): String? {
-        val targetDir = File(context.filesDir, modelName)
-        if (targetDir.exists() && targetDir.isDirectory && targetDir.list()?.isNotEmpty() == true) {
-            debugLog("Model already at: ${targetDir.absolutePath}")
-            return targetDir.absolutePath
-        }
-
-        return try {
-            extractAssetDir(modelName, targetDir)
-            targetDir.absolutePath
-        } catch (e: Exception) {
-            debugLog("Failed to extract model $modelName: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * Extract a single file from assets.
-     */
-    private fun prepareFile(fileName: String): String? {
-        val target = File(context.filesDir, fileName)
-        if (target.exists() && target.length() > 0) {
-            return target.absolutePath
-        }
-
-        return try {
-            context.assets.open(fileName).use { input ->
-                target.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            target.absolutePath
-        } catch (e: Exception) {
-            debugLog("Failed to extract file $fileName: ${e.message}")
-            null
-        }
-    }
-
-    private fun extractAssetDir(assetPath: String, targetDir: File) {
-        val assets = context.assets
-        val entries = assets.list(assetPath) ?: return
-        targetDir.mkdirs()
-
-        for (entry in entries) {
-            val childPath = "$assetPath/$entry"
-            val childEntries = assets.list(childPath)
-
-            if (childEntries != null && childEntries.isNotEmpty()) {
-                extractAssetDir(childPath, File(targetDir, entry))
-            } else {
-                val outFile = File(targetDir, entry)
-                assets.open(childPath).use { input ->
-                    outFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        }
-    }
 }

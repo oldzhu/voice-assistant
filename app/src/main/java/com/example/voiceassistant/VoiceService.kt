@@ -77,6 +77,10 @@ class VoiceService : Service(), LifecycleOwner {
     private val conversationHistory = mutableListOf<LLMBackend.ChatMessage>()
     private var stateChangeListener: ((State, String?) -> Unit)? = null
 
+    // Barge-in config
+    private var bargeInMode = "off"  // "off" | "on" | "keyword"
+    private var bargeInKeyword = "猪头"
+
     private val conversationLogFile by lazy { File(filesDir, "conversation.txt") }
     private val backupDir by lazy { File(filesDir, "backups").also { it.mkdirs() } }
 
@@ -128,7 +132,11 @@ class VoiceService : Service(), LifecycleOwner {
         }
 
         // Try system TTS first (suspendCancellableCoroutine, no deadlock)
-        val rate = ConfigManager(this@VoiceService).speechRate
+        val config = ConfigManager(this@VoiceService)
+        val rate = config.speechRate
+        bargeInMode = config.bargeInMode
+        bargeInKeyword = config.bargeInKeyword
+        debugLog("Barge-in mode: $bargeInMode, keyword: $bargeInKeyword")
         val sysOk = sysTtsEngine?.init(rate) ?: false
         if (sysOk) {
             useSystemTts = true
@@ -144,10 +152,21 @@ class VoiceService : Service(), LifecycleOwner {
             val ok = init(
                 onResult = { text ->
                     debugLog("ASR result: '$text'")
-                    onSpeechRecognized(text)
+                    if (state == State.SPEAKING && bargeInMode != "off") {
+                        // Barge-in during TTS
+                        debugLog("Barge-in detected, interrupting TTS")
+                        stopTts()
+                        onSpeechRecognized(text)
+                    } else {
+                        onSpeechRecognized(text)
+                    }
                 },
                 onPartial = { partial ->
-                    debugLog("ASR partial: '$partial'")
+                    // Mode C: keyword-triggered barge-in
+                    if (state == State.SPEAKING && bargeInMode == "keyword" && partial.contains(bargeInKeyword)) {
+                        debugLog("Keyword '$bargeInKeyword' detected in partial, interrupting TTS")
+                        // Note: we don't process here — wait for onResult with full text
+                    }
                 },
                 onError = { err ->
                     debugLog("ASR error: $err")
@@ -299,7 +318,11 @@ class VoiceService : Service(), LifecycleOwner {
     }
 
     private suspend fun speakTts(text: String) {
-        asrEngine?.stop()  // stop ASR before speaking to prevent self-loop
+        // Mode A (off): stop ASR to prevent self-loop
+        // Mode B (on) / C (keyword): keep ASR running for barge-in
+        if (bargeInMode == "off") {
+            asrEngine?.stop()
+        }
         if (useSystemTts) sysTtsEngine?.speak(text)
         else ttsEngine?.speak(text)
     }
@@ -331,8 +354,7 @@ class VoiceService : Service(), LifecycleOwner {
 
     private fun startListening() {
         if (state == State.STOPPED) return
-        state = State.LISTENING
-        debugLog("startListening() called, state=LISTENING")
+        updateState(State.LISTENING)
         asrEngine?.startListening()
     }
 
@@ -462,6 +484,22 @@ class VoiceService : Service(), LifecycleOwner {
         ConfigManager(this).speechRate = rate
         sysTtsEngine?.setSpeechRate(rate)
     }
+
+    fun setBargeInMode(mode: String) {
+        bargeInMode = mode
+        ConfigManager(this).bargeInMode = mode
+        debugLog("Barge-in mode changed to: $mode")
+    }
+
+    fun getBargeInMode(): String = bargeInMode
+
+    fun setBargeInKeyword(keyword: String) {
+        bargeInKeyword = keyword
+        ConfigManager(this).bargeInKeyword = keyword
+        debugLog("Barge-in keyword changed to: $keyword")
+    }
+
+    fun getBargeInKeyword(): String = bargeInKeyword
 
     fun listBackups(): List<File> {
         return backupDir.listFiles()?.filter { it.isFile && it.name.endsWith(".txt") }?.sortedByDescending { it.lastModified() } ?: emptyList()

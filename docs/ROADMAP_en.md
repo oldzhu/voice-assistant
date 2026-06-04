@@ -13,14 +13,23 @@
 | ⚡ Speech Rate | 0.5x–2.5x adjustable via settings slider |
 | 📋 History | Backup / restore / delete conversation logs |
 
-## 🔜 Near-term (v1.1–v1.3)
+## ✅ Completed (v1.1)
 
-### 1. Bilingual ASR Upgrade
-- Replace Chinese-only model with `sherpa-onnx-streaming-zipformer-bilingual-zh-en`
-- Switch to OnlineRecognizer streaming API for mixed CN/EN input
-- Direct recognition of terms like "linux kernel", "python API"
+| Module | Description |
+|--------|-------------|
+| 🌐 Bilingual ASR | Upgraded to Paraformer bilingual (`sherpa-onnx-streaming-paraformer-bilingual-zh-en`), supports mixed CN/EN |
+| 📡 Streaming Recognition | OfflineRecognizer → OnlineRecognizer, real-time incremental results with built-in endpoint detection |
 
-### 2. Tool Calling Framework (MCP-style)
+## ✅ Completed (v1.2)
+
+| Module | Description |
+|--------|-------------|
+| 🗣 Barge-in Modes | Three switchable modes: A (off) / B (voice interrupt) / C (keyword interrupt, default "pig head") |
+| 📊 Status Display | Fixed bug where state stuck at "replying" after TTS finished; now correctly returns to "listening" |
+
+## 🔜 Near-term (v1.3)
+
+### 1. Tool Calling Framework (MCP-style)
 ```
 User: "Search Shenzhen weather for me"
   → LLM outputs function_call: web_search("Shenzhen weather")
@@ -31,7 +40,7 @@ Initial tools:
 - 📍 Location
 - 🌤 Weather
 
-### 3. Wake Word / Always Listening
+### 2. Wake Word / Always Listening
 - Hands-free "pig head pig head" wake word
 - Silence detection for auto-sleep
 
@@ -80,7 +89,7 @@ voice-assistant/
 
 | Layer | Technology |
 |-------|------------|
-| ASR | Sherpa-ONNX (Zipformer CTC / Transducer) |
+| ASR | Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8) |
 | TTS | Android TextToSpeech (Yuemeng) |
 | LLM | DeepSeek API / Ollama |
 | UI | Jetpack Compose + Material 3 |

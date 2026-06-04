@@ -28,6 +28,8 @@ class ConfigManager(context: Context) {
         private const val KEY_OFFLINE_STT = "offline_stt_enabled"
         private const val KEY_ACCESS_KEY = "picovoice_access_key"
         private const val KEY_SPEECH_RATE = "speech_rate"
+        private const val KEY_BARGE_IN_MODE = "barge_in_mode"
+        private const val KEY_BARGE_IN_KEYWORD = "barge_in_keyword"
 
         const val BACKEND_CLOUD = "cloud"
         const val BACKEND_LOCAL = "local"
@@ -39,6 +41,7 @@ class ConfigManager(context: Context) {
         const val DEFAULT_SENSITIVITY = 0.7f
         const val DEFAULT_MAX_RECORDING = 30
         const val DEFAULT_SPEECH_RATE = 1.3f
+        const val DEFAULT_BARGE_IN_KEYWORD = "猪头"
     }
 
     var apiKey: String
@@ -82,6 +85,16 @@ class ConfigManager(context: Context) {
     var speechRate: Float
         get() = prefs.getFloat(KEY_SPEECH_RATE, DEFAULT_SPEECH_RATE)
         set(value) = prefs.edit().putFloat(KEY_SPEECH_RATE, value.coerceIn(0.5f, 2.5f)).apply()
+
+    /** Barge-in mode: "off" (stop ASR during TTS), "on" (always listen), "keyword" (only keyword triggers) */
+    var bargeInMode: String
+        get() = prefs.getString(KEY_BARGE_IN_MODE, "off") ?: "off"
+        set(value) = prefs.edit().putString(KEY_BARGE_IN_MODE, value).apply()
+
+    /** Keyword for barge-in mode C */
+    var bargeInKeyword: String
+        get() = prefs.getString(KEY_BARGE_IN_KEYWORD, DEFAULT_BARGE_IN_KEYWORD) ?: DEFAULT_BARGE_IN_KEYWORD
+        set(value) = prefs.edit().putString(KEY_BARGE_IN_KEYWORD, value).apply()
 
     /**
      * Check if the cloud backend is configured (has API key).

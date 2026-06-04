@@ -204,6 +204,52 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(0x33000000)
         })
 
+        // Barge-in mode label
+        val bargeLabel = android.widget.TextView(this).apply {
+            text = "打断模式" + when (cm.bargeInMode) {
+                "on" -> "：允许打断"
+                "keyword" -> "：关键词打断"
+                else -> "：不打断"
+            }
+            textSize = 16f; setTextColor(0xFF333333.toInt())
+            setPadding(0, 0, 0, 8)
+        }
+        layout.addView(bargeLabel)
+
+        val bargeGroup = android.widget.RadioGroup(this).apply {
+            orientation = android.widget.RadioGroup.HORIZONTAL
+            setPadding(0, 0, 0, 8)
+        }
+        for ((mode, label) in listOf("off" to "不打断", "on" to "允许打断", "keyword" to "关键词")) {
+            bargeGroup.addView(android.widget.RadioButton(this).apply {
+                text = label; id = mode.hashCode()
+                isChecked = cm.bargeInMode == mode
+                textSize = 14f
+            })
+        }
+        bargeGroup.setOnCheckedChangeListener { _, id ->
+            val mode = when (id) {
+                "on".hashCode() -> "on"
+                "keyword".hashCode() -> "keyword"
+                else -> "off"
+            }
+            bargeLabel.text = "打断模式" + when (mode) {
+                "on" -> "：允许打断"
+                "keyword" -> "：关键词打断"
+                else -> "：不打断"
+            }
+            voiceService?.setBargeInMode(mode)
+        }
+        layout.addView(bargeGroup)
+
+        // Divider
+        layout.addView(android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 1
+            ).apply { topMargin = 8; bottomMargin = 8 }
+            setBackgroundColor(0x33000000)
+        })
+
         val apiLabel = android.widget.TextView(this).apply {
             text = "API Key: ${if (cm.apiKey.isNotBlank()) "****${cm.apiKey.takeLast(4)}" else "未设置"}"
             textSize = 14f; setTextColor(0xFF555555.toInt())

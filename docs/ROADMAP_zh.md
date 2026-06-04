@@ -13,14 +13,23 @@
 | ⚡ 语速调节 | 0.5x–2.5x 可调，设置界面滑块 |
 | 📋 对话历史 | 备份/恢复/删除，本地存储 |
 
-## 🔜 短期 (v1.1–v1.3)
+## ✅ 已完成 (v1.1)
 
-### 1. ASR 升级 — 中英双语识别
-- 替换纯中文模型为 `sherpa-onnx-streaming-zipformer-bilingual-zh-en`
-- 改用 OnlineRecognizer 流式 API，支持中英混杂
-- 英文术语如 "linux kernel"、"python API" 直接识别
+| 模块 | 说明 |
+|------|------|
+| 🌐 双语 ASR | 升级为 Paraformer 双语模型 (`sherpa-onnx-streaming-paraformer-bilingual-zh-en`)，支持中英混杂 |
+| 📡 流式识别 | OfflineRecognizer → OnlineRecognizer，边说边出字，内置端点检测 |
 
-### 2. 工具调用框架 (MCP 风格)
+## ✅ 已完成 (v1.2)
+
+| 模块 | 说明 |
+|------|------|
+| 🗣 打断模式 | 三种模式可切换：A 关闭打断 / B 语音打断 / C 关键词打断（默认 "猪头"） |
+| 📊 状态显示 | 修复回复完成后状态卡在"回复中"的 bug，正确切回"监听中" |
+
+## 🔜 短期 (v1.3)
+
+### 1. 工具调用框架 (MCP 风格)
 ```
 用户: "帮我搜索深圳天气"
   → LLM 输出 function_call: web_search("深圳天气")
@@ -31,7 +40,7 @@
 - 📍 获取位置
 - 🌤 天气查询
 
-### 3. 唤醒词 / 持续监听
+### 2. 唤醒词 / 持续监听
 - 免按按钮，"猪头猪头" 唤醒
 - 静音检测自动休眠
 
@@ -80,7 +89,7 @@ voice-assistant/
 
 | 层 | 技术 |
 |----|------|
-| ASR | Sherpa-ONNX (Zipformer CTC / Transducer) |
+| ASR | Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8) |
 | TTS | Android TextToSpeech (悦盟) |
 | LLM | DeepSeek API / Ollama |
 | UI | Jetpack Compose + Material 3 |
