@@ -2,6 +2,30 @@
 
 所有值得注意的变更记录。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 
+## [v1.4] — 2026-06-04
+
+### 新增
+- **MCP Client**：支持连接 MCP (Model Context Protocol) server，自动发现并注册工具
+  - `StdioMcpTransport` — ProcessBuilder 启动本地 MCP server（Go/Rust 编译的二进制）
+  - `HttpMcpTransport` — OkHttp 连接远程 HTTP MCP server
+  - `McpClient` — 完整 JSON-RPC 2.0 协议实现（initialize / tools/list / tools/call）
+  - `McpToolAdapter` — MCP tool schema 自动适配为 Tool 接口
+  - 配置持久化：`ConfigManager.mcpServers`（JSON 数组，支持多 server）
+  - 工具命名：`mcp_{server_name}_{tool_name}` 防止冲突
+- `ConfigManager` 新增 `McpServerConfig` 数据类和 `mcpServers` 属性
+
+### 架构
+```
+VoiceService → connectMcpServers()
+  ├── StdioMcpTransport (本地进程)
+  └── HttpMcpTransport  (远程 HTTP)
+        │
+        ▼ McpClient (JSON-RPC)
+  initialize() → tools/list() → McpToolAdapter → ToolRegistry
+```
+
+> 详见 [docs/plans/2026-06-04-mcp-client.md](plans/2026-06-04-mcp-client.md)
+
 ## [v1.3.1] — 2026-06-04
 
 ### 新增

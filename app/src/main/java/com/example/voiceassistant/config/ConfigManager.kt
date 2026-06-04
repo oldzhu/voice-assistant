@@ -30,6 +30,7 @@ class ConfigManager(context: Context) {
         private const val KEY_SPEECH_RATE = "speech_rate"
         private const val KEY_BARGE_IN_MODE = "barge_in_mode"
         private const val KEY_BARGE_IN_KEYWORD = "barge_in_keyword"
+        private const val KEY_MCP_SERVERS = "mcp_servers"
 
         const val BACKEND_CLOUD = "cloud"
         const val BACKEND_LOCAL = "local"
@@ -96,6 +97,24 @@ class ConfigManager(context: Context) {
         get() = prefs.getString(KEY_BARGE_IN_KEYWORD, DEFAULT_BARGE_IN_KEYWORD) ?: DEFAULT_BARGE_IN_KEYWORD
         set(value) = prefs.edit().putString(KEY_BARGE_IN_KEYWORD, value).apply()
 
+    // --- MCP Server configs ---
+
+    /** MCP server configurations stored as JSON array string. */
+    var mcpServers: List<McpServerConfig>
+        get() {
+            val json = prefs.getString(KEY_MCP_SERVERS, "[]") ?: "[]"
+            return try {
+                val type = object : com.google.gson.reflect.TypeToken<List<McpServerConfig>>() {}.type
+                com.google.gson.Gson().fromJson(json, type) ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        set(value) {
+            val json = com.google.gson.Gson().toJson(value)
+            prefs.edit().putString(KEY_MCP_SERVERS, json).apply()
+        }
+
     /**
      * Check if the cloud backend is configured (has API key).
      */
@@ -105,4 +124,18 @@ class ConfigManager(context: Context) {
      * Check if Picovoice is configured.
      */
     fun isPicovoiceConfigured(): Boolean = picovoiceAccessKey.isNotBlank()
+}
+
+/** Configuration for a single MCP server. */
+data class McpServerConfig(
+    val name: String,
+    val transport: String = "stdio",  // "stdio" | "http"
+    val command: String? = null,      // for stdio
+    val args: List<String> = emptyList(),
+    val url: String? = null,          // for http
+    val headers: Map<String, String> = emptyMap(),
+    val timeout: Long = 30_000
+) {
+    val isStdio: Boolean get() = transport == "stdio"
+    val isHttp: Boolean get() = transport == "http"
 }

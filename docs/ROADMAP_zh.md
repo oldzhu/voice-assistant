@@ -43,14 +43,15 @@
 | 💤 休眠状态 | 说"别听了"进入休眠，ASR 继续运行但只响应唤醒词（"开始听"/"猪头回来"），不回复一般语音 |
 | 🐛 DeepSeek 思考模式 | 修复 `reasoning_content` 丢弃导致工具调用 API 400 的 bug |
 
-## 🔜 短期 (v1.4)
+## ✅ 已完成 (v1.4)
 
-### 1. MCP Client
-- 接入 Model Context Protocol，连接外部 tool server
-- 支持 stdio / HTTP transport
-- MCP 工具自动注册到 ToolRegistry
+| 模块 | 说明 |
+|------|------|
+| 🔌 MCP Client | 连接 MCP server，自动发现工具。支持 stdio (ProcessBuilder) + HTTP (OkHttp)。JSON-RPC 2.0 协议 |
 
-### 2. 唤醒词 / 省电休眠
+## 🔜 短期 (v1.5)
+
+### 1. 唤醒词 / 省电休眠
 - 免按按钮，"猪头猪头" 常驻唤醒
 - Sherpa-ONNX KeywordSpotter 低功耗唤醒
 - 休眠时省电策略

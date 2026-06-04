@@ -31,6 +31,11 @@ import com.example.voiceassistant.tools.ClearHistoryTool
 import com.example.voiceassistant.tools.WebSearchTool
 import com.example.voiceassistant.tools.WebFetchTool
 import com.example.voiceassistant.tools.WeatherTool
+import com.example.voiceassistant.llm.transport.StdioMcpTransport
+import com.example.voiceassistant.llm.transport.HttpMcpTransport
+import com.example.voiceassistant.llm.McpClient
+import com.example.voiceassistant.llm.McpToolAdapter
+import com.example.voiceassistant.config.McpServerConfig
 import com.example.voiceassistant.speech.SherpaAsrEngine
 import com.example.voiceassistant.speech.SherpaTtsEngine
 import com.example.voiceassistant.speech.SystemTtsEngine
@@ -267,6 +272,9 @@ class VoiceService : Service(), LifecycleOwner {
             }
             toolCallEngine = ToolCallEngine(cloudBackend, toolRegistry)
             debugLog("Tools registered: ${toolRegistry.getAll().map { it.name }}")
+
+            // Connect MCP servers and register their tools
+            lifecycleScope.launch { connectMcpServers(cloudBackend) }
         } else {
             debugLog("Local backend does not support function calling; tools disabled")
         }
@@ -623,6 +631,57 @@ class VoiceService : Service(), LifecycleOwner {
 
     fun listBackups(): List<File> {
         return backupDir.listFiles()?.filter { it.isFile && it.name.endsWith(".txt") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+
+    /** Connect to configured MCP servers and register their tools. */
+    private suspend fun connectMcpServers(cloudBackend: CloudLLMBackend) {
+        val config = ConfigManager(this@VoiceService)
+        val servers = config.mcpServers
+        if (servers.isEmpty()) {
+            debugLog("No MCP servers configured")
+            return
+        }
+
+        for (server in servers) {
+            try {
+                val transport = if (server.isStdio) {
+                    StdioMcpTransport(
+                        command = server.command ?: continue,
+                        args = server.args
+                    )
+                } else if (server.isHttp) {
+                    HttpMcpTransport(
+                        url = server.url ?: continue,
+                        headers = server.headers,
+                        timeoutSec = server.timeout / 1000
+                    )
+                } else {
+                    debugLog("MCP '${server.name}': unknown transport '${server.transport}'")
+                    continue
+                }
+
+                val client = McpClient(server.name, transport)
+                val initResult = client.connect()
+                debugLog("MCP '${server.name}' connected: ${initResult.serverName} v${initResult.serverVersion}")
+
+                val tools = client.listTools()
+                debugLog("MCP '${server.name}': ${tools.size} tools discovered")
+
+                for (tool in tools) {
+                    val adapter = McpToolAdapter(server.name, tool, client)
+                    toolRegistry.register(adapter)
+                    debugLog("MCP '${server.name}': registered ${adapter.name}")
+                }
+
+                // Update toolCallEngine with new tools
+                toolCallEngine = ToolCallEngine(cloudBackend, toolRegistry)
+            } catch (e: Exception) {
+                debugLog("MCP '${server.name}' connection failed: ${e.message}")
+            }
+        }
+
+        val allTools = toolRegistry.getAll().map { it.name }
+        debugLog("All tools (after MCP): $allTools")
     }
 
     fun backupConversation(name: String) {

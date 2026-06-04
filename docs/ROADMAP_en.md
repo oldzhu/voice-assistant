@@ -43,14 +43,15 @@
 | 💤 Dormant State | Say "stop listening" to sleep; ASR keeps running, only wake phrases ("start listening" / "come back") accepted |
 | 🐛 DeepSeek Thinking Fix | Preserve `reasoning_content` in multi-turn tool calls to avoid API 400 errors |
 
-## 🔜 Near-term (v1.4)
+## ✅ Completed (v1.4)
 
-### 1. MCP Client
-- Connect to Model Context Protocol servers for external tools
-- Support stdio / HTTP transports
-- MCP tools auto-registered to ToolRegistry
+| Module | Description |
+|--------|-------------|
+| 🔌 MCP Client | Connect to MCP servers, auto-discover tools. Supports stdio (ProcessBuilder) + HTTP (OkHttp). JSON-RPC 2.0 |
 
-### 2. Wake Word / Low-power Sleep
+## 🔜 Near-term (v1.5)
+
+### 1. Wake Word / Low-power Sleep
 - Hands-free "pig head pig head" always-on wake word
 - Sherpa-ONNX KeywordSpotter for low-power listening
 - Battery-efficient sleep strategy

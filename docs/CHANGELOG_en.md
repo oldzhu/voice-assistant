@@ -2,6 +2,30 @@
 
 All notable changes are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [v1.4] — 2026-06-04
+
+### Added
+- **MCP Client**: connect to MCP (Model Context Protocol) servers, auto-discover and register tools
+  - `StdioMcpTransport` — ProcessBuilder-based local MCP server (Go/Rust binaries)
+  - `HttpMcpTransport` — OkHttp-based remote HTTP MCP server
+  - `McpClient` — full JSON-RPC 2.0 protocol (initialize / tools/list / tools/call)
+  - `McpToolAdapter` — auto-adapts MCP tool schema to Tool interface
+  - Config persistence: `ConfigManager.mcpServers` (JSON array, multi-server)
+  - Tool naming: `mcp_{server_name}_{tool_name}` to prevent collisions
+- `ConfigManager`: new `McpServerConfig` data class and `mcpServers` property
+
+### Architecture
+```
+VoiceService → connectMcpServers()
+  ├── StdioMcpTransport (local process)
+  └── HttpMcpTransport  (remote HTTP)
+        │
+        ▼ McpClient (JSON-RPC)
+  initialize() → tools/list() → McpToolAdapter → ToolRegistry
+```
+
+> See [docs/plans/2026-06-04-mcp-client.md](plans/2026-06-04-mcp-client.md)
+
 ## [v1.3.1] — 2026-06-04
 
 ### Added
