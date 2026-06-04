@@ -46,7 +46,7 @@ class StopListeningTool(
     private val onStop: () -> Unit
 ) : Tool {
     override val name = "stop_listening"
-    override val description = "停止语音监听，暂停识别。当用户说'别听了'、'暂停'、'停下'等时调用。"
+    override val description = "停止语音监听，进入休眠模式。当用户说'别听了'、'休息吧'、'休息'、'睡了'、'睡觉'、'暂停'、'停下'、'停止'、'rest'、'stop'等任何表示不想继续对话的意思时，立即调用此工具。"
     override val parameters = emptyMap<String, ToolParameter>()
 
     override suspend fun execute(args: Map<String, Any?>): String {

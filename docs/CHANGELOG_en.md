@@ -9,10 +9,11 @@ All notable changes are documented here. Follows [Keep a Changelog](https://keep
   - `web_search` — DuckDuckGo web search (no API key needed)
   - `web_fetch` — Fetch webpage and extract plain text
   - `get_weather` — wttr.in weather lookup (no API key needed)
-- **Dormant state (DORMANT)**: say "stop listening" to enter sleep mode
+- **Dormant state (DORMANT)**: say "stop listening" / "rest" / "sleep" to enter sleep mode
   - ASR keeps running but ignores general speech, only responds to wake phrases ("start listening", "come back", etc.)
-  - LLM confirmation message is silently swallowed when entering dormant
-  - UI shows "💤 Dormant"
+  - Plays farewell "好的，我休息了，随时呼我" on entering
+  - Plays greeting "我回来了，有啥要聊的？" on wake
+  - Sleep commands matched via keyword (bypass LLM for reliability)
 
 ### Fixed
 - **DeepSeek thinking mode**: when reasoning is enabled, `reasoning_content` must be passed back verbatim or API returns 400

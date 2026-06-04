@@ -59,6 +59,8 @@ class VoiceService : Service(), LifecycleOwner {
         private const val MAX_TEST_ATTEMPTS = 3
         // Wake phrases that resume from DORMANT state
         private val WAKE_PHRASES = listOf("开始听", "开始监听", "继续", "回来", "猪头回来", "猪头")
+        // Sleep phrases that enter DORMANT directly (bypass LLM for reliability)
+        private val SLEEP_PHRASES = listOf("别听了", "休息", "睡觉", "暂停", "停下", "停止", "睡了")
     }
 
     private fun debugLog(msg: String) {
@@ -134,10 +136,19 @@ class VoiceService : Service(), LifecycleOwner {
             setCallbacks(
                 onStart = {
                     bargeInKeywordDetected = false
-                    updateState(State.SPEAKING)
+                    // Don't override DORMANT — farewell message keeps dormant state
+                    if (state != State.DORMANT) {
+                        updateState(State.SPEAKING)
+                    }
                 },
                 onDone = {
                     bargeInKeywordDetected = false
+                    // If DORMANT (farewell message), stay dormant but keep ASR alive for wake words
+                    if (state == State.DORMANT) {
+                        debugLog("TTS done but staying DORMANT — restarting ASR for wake words")
+                        asrEngine?.startListening()
+                        return@setCallbacks
+                    }
                     lifecycleScope.launch {
                         delay(PAUSE_BEFORE_LISTEN_MS)
                         startListening()
@@ -328,12 +339,28 @@ class VoiceService : Service(), LifecycleOwner {
             onTestAsrResult(text)
             return
         }
+        // Sleep phrases: go dormant directly without LLM (more reliable than tool calling)
+        if (state == State.LISTENING) {
+            val sleepMatch = SLEEP_PHRASES.any { text.contains(it) }
+            if (sleepMatch) {
+                debugLog("Sleep phrase detected: '$text' → entering DORMANT")
+                updateState(State.DORMANT)
+                // Play farewell while staying DORMANT — onDone won't startListening
+                lifecycleScope.launch { speakTts("好的，我休息了，随时呼我") }
+                return
+            }
+        }
         // Dormant mode: only wake phrases pass through, everything else silently ignored
         if (state == State.DORMANT) {
             val matched = WAKE_PHRASES.any { text.contains(it) }
             if (matched) {
                 debugLog("Wake phrase detected in dormant: '$text'")
-                startListening()
+                asrEngine?.stop() // Prevent ASR from hearing the greeting TTS
+                lifecycleScope.launch {
+                    updateState(State.SPEAKING, "我回来了，有啥要聊的？")
+                    speakTts("我回来了，有啥要聊的？")
+                    // startListening() will be called from TTS onDone
+                }
             } else {
                 debugLog("Dormant — ignoring: '$text'")
             }
@@ -479,12 +506,11 @@ class VoiceService : Service(), LifecycleOwner {
             conversationHistory.add(LLMBackend.ChatMessage("assistant", response))
             if (conversationHistory.size > HISTORY_MAX_SIZE) conversationHistory.removeAt(0)
             saveConversationLine("🐷 猪头", response)
-            // If tool execution put us in DORMANT, don't speak — stay dormant
-            if (state == State.DORMANT) {
-                debugLog("In DORMANT after tool call, suppressing TTS response")
-                return
+            // If tool execution put us in DORMANT (stop_listening), still speak the farewell
+            // Keep DORMANT state so TTS onDone stays dormant after farewell
+            if (state != State.DORMANT) {
+                updateState(State.SPEAKING, response)
             }
-            updateState(State.SPEAKING, response)
             speakTts(response)
         } catch (e: Exception) {
             debugLog("LLM error: ${e.message}")
