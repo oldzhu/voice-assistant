@@ -21,6 +21,13 @@ import com.example.voiceassistant.config.ConfigManager
 import com.example.voiceassistant.llm.CloudLLMBackend
 import com.example.voiceassistant.llm.LLMBackend
 import com.example.voiceassistant.llm.LocalLLMBackend
+import com.example.voiceassistant.llm.ToolRegistry
+import com.example.voiceassistant.llm.ToolCallEngine
+import com.example.voiceassistant.tools.SetSpeechRateTool
+import com.example.voiceassistant.tools.StopListeningTool
+import com.example.voiceassistant.tools.StartListeningTool
+import com.example.voiceassistant.tools.SetBargeInModeTool
+import com.example.voiceassistant.tools.ClearHistoryTool
 import com.example.voiceassistant.speech.SherpaAsrEngine
 import com.example.voiceassistant.speech.SherpaTtsEngine
 import com.example.voiceassistant.speech.SystemTtsEngine
@@ -80,6 +87,11 @@ class VoiceService : Service(), LifecycleOwner {
     // Barge-in config
     private var bargeInMode = "off"  // "off" | "on" | "keyword"
     private var bargeInKeyword = "猪头"
+    private var bargeInKeywordDetected = false  // flag for mode C
+
+    // Tool calling
+    private lateinit var toolRegistry: ToolRegistry
+    private lateinit var toolCallEngine: ToolCallEngine
 
     private val conversationLogFile by lazy { File(filesDir, "conversation.txt") }
     private val backupDir by lazy { File(filesDir, "backups").also { it.mkdirs() } }
@@ -108,13 +120,19 @@ class VoiceService : Service(), LifecycleOwner {
     }
 
     private suspend fun initEngines() {
+        // Enable full-duplex audio path for hardware echo cancellation
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        debugLog("AudioManager mode: MODE_IN_COMMUNICATION")
+
         // Set up system TTS engine
         sysTtsEngine = SystemTtsEngine(this@VoiceService).apply {
             setCallbacks(
                 onStart = {
+                    bargeInKeywordDetected = false
                     updateState(State.SPEAKING)
                 },
                 onDone = {
+                    bargeInKeywordDetected = false
                     lifecycleScope.launch {
                         delay(PAUSE_BEFORE_LISTEN_MS)
                         startListening()
@@ -152,20 +170,37 @@ class VoiceService : Service(), LifecycleOwner {
             val ok = init(
                 onResult = { text ->
                     debugLog("ASR result: '$text'")
-                    if (state == State.SPEAKING && bargeInMode != "off") {
-                        // Barge-in during TTS
-                        debugLog("Barge-in detected, interrupting TTS")
-                        stopTts()
-                        onSpeechRecognized(text)
+                    if (state == State.SPEAKING) {
+                        when {
+                            bargeInMode == "on" -> {
+                                // Mode B: any speech interrupts TTS
+                                debugLog("Barge-in (voice) detected, interrupting TTS")
+                                bargeInKeywordDetected = false
+                                stopTts()
+                                onSpeechRecognized(text)
+                            }
+                            bargeInMode == "keyword" && bargeInKeywordDetected -> {
+                                // Mode C: keyword was detected, process this utterance
+                                debugLog("Barge-in (keyword) processing: '$text'")
+                                bargeInKeywordDetected = false
+                                // TTS already stopped in onPartial
+                                onSpeechRecognized(text)
+                            }
+                            else -> {
+                                // Mode C without keyword, or mode A (shouldn't reach here) — ignore as echo
+                                debugLog("Ignoring speech during TTS (mode=$bargeInMode, keywordDet=$bargeInKeywordDetected)")
+                            }
+                        }
                     } else {
                         onSpeechRecognized(text)
                     }
                 },
                 onPartial = { partial ->
-                    // Mode C: keyword-triggered barge-in
+                    // Mode C: keyword-triggered barge-in — detect in real-time
                     if (state == State.SPEAKING && bargeInMode == "keyword" && partial.contains(bargeInKeyword)) {
                         debugLog("Keyword '$bargeInKeyword' detected in partial, interrupting TTS")
-                        // Note: we don't process here — wait for onResult with full text
+                        bargeInKeywordDetected = true
+                        stopTts()
                     }
                 },
                 onError = { err ->
@@ -186,6 +221,35 @@ class VoiceService : Service(), LifecycleOwner {
         debugLog("Initializing LLM backend...")
         llmBackend = createLLMBackend()
         debugLog("LLM backend ready")
+
+        // Initialize tool calling system
+        val cloudBackend = llmBackend as? CloudLLMBackend
+        if (cloudBackend != null) {
+            toolRegistry = ToolRegistry().apply {
+                register(SetSpeechRateTool { rate ->
+                    val cfg = ConfigManager(this@VoiceService)
+                    cfg.speechRate = rate
+                    sysTtsEngine?.setSpeechRate(rate)
+                })
+                register(StopListeningTool {
+                    asrEngine?.stop()
+                    updateState(State.STOPPED)
+                })
+                register(StartListeningTool {
+                    lifecycleScope.launch { startListening() }
+                })
+                register(SetBargeInModeTool { mode ->
+                    setBargeInMode(mode)
+                })
+                register(ClearHistoryTool {
+                    conversationHistory.clear()
+                })
+            }
+            toolCallEngine = ToolCallEngine(cloudBackend, toolRegistry)
+            debugLog("Tools registered: ${toolRegistry.getAll().map { it.name }}")
+        } else {
+            debugLog("Local backend does not support function calling; tools disabled")
+        }
 
         initialized = true
         debugLog("Engines initialized, state=$state")
@@ -342,6 +406,8 @@ class VoiceService : Service(), LifecycleOwner {
         asrEngine?.stop(); asrEngine?.release()
         stopTts(); releaseTts()
         try { wakeLock?.release() } catch (_: Exception) {}
+        audioManager.mode = AudioManager.MODE_NORMAL
+        debugLog("AudioManager mode: MODE_NORMAL (restored)")
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         super.onDestroy()
     }
@@ -359,6 +425,7 @@ class VoiceService : Service(), LifecycleOwner {
     }
 
     private suspend fun processQuery(text: String) {
+        val engine = if (::toolCallEngine.isInitialized) toolCallEngine else null
         val backend = llmBackend ?: run {
             val msg = "请先在设置里填入API密钥"
             debugLog("LLM backend null, TTS: $msg")
@@ -369,24 +436,25 @@ class VoiceService : Service(), LifecycleOwner {
         conversationHistory.add(LLMBackend.ChatMessage("user", text))
         saveConversationLine("👤 用户", text)
         updateState(State.THINKING)
+
         try {
-            val result = withTimeoutOrNull(15000L) {
-                backend.chat(text, conversationHistory)
-            }
-            val response = when {
-                result == null -> null
-                result.isSuccess -> result.getOrNull()
-                else -> {
-                    debugLog("LLM error: ${result.exceptionOrNull()?.message}")
-                    null
+            // Use tool-calling engine if available, fall back to plain chat
+            val result = if (engine != null) {
+                withTimeoutOrNull(30000L) {
+                    engine.chat(text, conversationHistory)
+                }
+            } else {
+                withTimeoutOrNull(15000L) {
+                    backend.chat(text, conversationHistory)
                 }
             }
-            if (response == null) {
-                val msg = "回复超时了"
-                debugLog("LLM timeout")
-                updateState(State.SPEAKING, msg)
-                speakTts(msg)
-                return
+            val response = when {
+                result == null -> "回复超时了"
+                result.isSuccess -> result.getOrNull() ?: "没听清楚，再说一次？"
+                else -> {
+                    debugLog("LLM error: ${result.exceptionOrNull()?.message}")
+                    "出了点问题，再试一次"
+                }
             }
             conversationHistory.add(LLMBackend.ChatMessage("assistant", response))
             if (conversationHistory.size > HISTORY_MAX_SIZE) conversationHistory.removeAt(0)
