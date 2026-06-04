@@ -26,32 +26,34 @@
 |--------|-------------|
 | 🗣 Barge-in Modes | Three switchable modes: A (off) / B (voice interrupt) / C (keyword interrupt, default "pig head") |
 | 📊 Status Display | Fixed bug where state stuck at "replying" after TTS finished; now correctly returns to "listening" |
+| 🔊 Full-duplex AEC | AudioSource → VOICE_COMMUNICATION + MODE_IN_COMMUNICATION, hardware AEC for barge-in modes |
 
-## 🔜 Near-term (v1.3)
+## ✅ Completed (v1.3)
 
-### 1. Tool Calling Framework (MCP-style)
-```
-User: "Search Shenzhen weather for me"
-  → LLM outputs function_call: web_search("Shenzhen weather")
-  → App executes → result back to LLM → TTS response
-```
-Initial tools:
-- 🌐 Web search
-- 📍 Location
-- 🌤 Weather
+| Module | Description |
+|--------|-------------|
+| 🔧 Tool Calling Framework | OpenAI function calling compatible. Tool interface → ToolRegistry → ToolCallEngine multi-turn execution loop |
+| 🎛 Voice Control Tools | `set_speech_rate` / `stop_listening` / `start_listening` / `set_barge_in_mode` / `clear_history` — control the assistant via natural language |
+
+## 🔜 Near-term (v1.4)
+
+### 1. External Tools
+- 🌐 Web search (DuckDuckGo / SerpAPI)
+- 🌤 Weather lookup
+- 📄 Web fetch / content extraction
 
 ### 2. Wake Word / Always Listening
 - Hands-free "pig head pig head" wake word
 - Silence detection for auto-sleep
 
-## 📅 Mid-term (v1.4–v2.0)
+## 📅 Mid-term (v1.5–v2.0)
 
 | Module | Description |
 |--------|-------------|
-| 🌐 Networking | HTTP requests, web scraping, RSS feeds |
+| 🧠 Context Memory | Remember user preferences, key conversation details |
+| 🗄 Local KB | RAG over personal notes / documents |
 | 🎵 Media | Music search / download / playback |
 | ⏰ System Tools | Alarm, reminders, calendar, WeChat messages |
-| 🗄 Local KB | RAG over personal notes / documents |
 | 🔧 Plugins | Third-party tool registration |
 
 ## 🚀 Long-term (v2.0+)
@@ -73,16 +75,26 @@ voice-assistant/
 │   │   ├── MainActivity.kt          # Main UI
 │   │   ├── VoiceService.kt          # Foreground service, state machine
 │   │   ├── config/ConfigManager.kt  # Persistent config
-│   │   ├── llm/                     # LLM backends
-│   │   │   ├── CloudLLMBackend.kt   # DeepSeek API
-│   │   │   └── LocalLLMBackend.kt   # Ollama local
+│   │   ├── llm/                     # LLM backends + tool engine
+│   │   │   ├── LLMBackend.kt        # Common interface
+│   │   │   ├── CloudLLMBackend.kt   # DeepSeek API + function calling
+│   │   │   ├── LocalLLMBackend.kt   # Ollama local
+│   │   │   ├── Tool.kt              # Tool interface definition
+│   │   │   ├── ToolRegistry.kt      # Tool registration hub
+│   │   │   └── ToolCallEngine.kt    # LLM↔tool execution loop
+│   │   ├── tools/                   # Tool implementations
+│   │   │   └── ControlTools.kt      # Voice control toolset
 │   │   └── speech/                  # Speech engines
 │   │       ├── SherpaAsrEngine.kt   # Offline ASR
 │   │       ├── SystemTtsEngine.kt   # System TTS
 │   │       └── SherpaTtsEngine.kt   # Offline TTS (deprecated)
 │   ├── src/main/assets/             # Models (download separately)
 │   └── build.gradle.kts
-└── docs/                            # Project documentation
+├── docs/                            # Project documentation
+│   ├── ROADMAP_zh.md / _en.md
+│   ├── CHANGELOG_zh.md / _en.md
+│   └── plans/                       # Implementation plans
+└── CHANGELOG.md                     # (root, deprecated)
 ```
 
 ## 🔗 Tech Stack
@@ -91,7 +103,8 @@ voice-assistant/
 |-------|------------|
 | ASR | Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8) |
 | TTS | Android TextToSpeech (Yuemeng) |
-| LLM | DeepSeek API / Ollama |
+| LLM | DeepSeek API (function calling) / Ollama |
+| Tool Framework | OpenAI function calling compatible |
 | UI | Jetpack Compose + Material 3 |
-| Audio | AudioRecord + AEC |
+| Audio | AudioRecord + AEC + MODE_IN_COMMUNICATION |
 | Build | Gradle 9.x + Kotlin 2.x |

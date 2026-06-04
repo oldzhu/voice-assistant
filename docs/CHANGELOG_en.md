@@ -2,6 +2,26 @@
 
 All notable changes are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [v1.3] — 2026-06-04
+
+### Added
+- **Tool Calling Framework**: OpenAI function calling compatible protocol enabling LLM to invoke local tools
+  - `Tool` interface: unified tool definition (name/description/parameters/execute)
+  - `ToolRegistry`: tool registration and execution hub
+  - `ToolCallEngine`: LLM↔tool multi-turn execution loop (max 5 turns, 30s timeout)
+  - `CloudLLMBackend.chatWithTools()`: sends tools to API + parses function_call responses
+- **5 voice control tools**, control the assistant with natural language:
+  - `set_speech_rate` — adjust TTS speed ("set speech rate to 1.5")
+  - `stop_listening` — pause ASR ("stop listening")
+  - `start_listening` — resume ASR ("start listening")
+  - `set_barge_in_mode` — change interrupt mode ("switch to keyword interrupt")
+  - `clear_history` — clear conversation ("forget previous chat")
+
+### Changed
+- `VoiceService.processQuery()` now routes through ToolCallEngine when available
+- Upgraded ROADMAP: v1.3 marked complete, v1.4 external tools planned
+- New `tools/` package, expanded project structure
+
 ## [v1.2] — 2026-06-04
 
 ### Added
@@ -15,8 +35,11 @@ All notable changes are documented here. Follows [Keep a Changelog](https://keep
 - **Status display bug**: State stuck at "replying" after TTS finished; now correctly returns to "listening"
   - Root cause: `startListening()` assigned directly to `state` field, bypassing `updateState()` UI notification
   - Fix: Use `updateState()` for all state transitions
+- **Mode C no-op bug**: `onResult` condition `!= "off"` made B and C behave identically
+  - Fix: added `bargeInKeywordDetected` flag; `onPartial` stops TTS on keyword; `onResult` only processes keyword hits
 
 ### Changed
+- AudioSource → `VOICE_COMMUNICATION` + `MODE_IN_COMMUNICATION`, enabling hardware full-duplex echo cancellation
 - Corrected ROADMAP v1.1 model name (Zipformer → Paraformer)
 - Updated tech stack ASR layer to Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8)
 

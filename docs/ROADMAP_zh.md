@@ -26,32 +26,34 @@
 |------|------|
 | 🗣 打断模式 | 三种模式可切换：A 关闭打断 / B 语音打断 / C 关键词打断（默认 "猪头"） |
 | 📊 状态显示 | 修复回复完成后状态卡在"回复中"的 bug，正确切回"监听中" |
+| 🔊 全双工回声消除 | AudioSource → VOICE_COMMUNICATION + MODE_IN_COMMUNICATION，硬件 AEC 兼容打断模式 |
 
-## 🔜 短期 (v1.3)
+## ✅ 已完成 (v1.3)
 
-### 1. 工具调用框架 (MCP 风格)
-```
-用户: "帮我搜索深圳天气"
-  → LLM 输出 function_call: web_search("深圳天气")
-  → App 执行 → 结果回传 LLM → TTS 播报
-```
-首批工具：
-- 🌐 网页搜索
-- 📍 获取位置
+| 模块 | 说明 |
+|------|------|
+| 🔧 工具调用框架 | OpenAI function calling 兼容 API。Tool 接口 → ToolRegistry → ToolCallEngine 多轮执行循环 |
+| 🎛 语音控制工具 | `set_speech_rate` / `stop_listening` / `start_listening` / `set_barge_in_mode` / `clear_history`——自然语言控制猪头 |
+
+## 🔜 短期 (v1.4)
+
+### 1. 外部工具
+- 🌐 网页搜索（DuckDuckGo / SerpAPI）
 - 🌤 天气查询
+- 📄 网页抓取/内容提取
 
 ### 2. 唤醒词 / 持续监听
 - 免按按钮，"猪头猪头" 唤醒
 - 静音检测自动休眠
 
-## 📅 中期 (v1.4–v2.0)
+## 📅 中期 (v1.5–v2.0)
 
 | 模块 | 说明 |
 |------|------|
-| 🌐 联网能力 | HTTP 请求、网页抓取、RSS 订阅 |
+| 🧠 上下文记忆 | 记住用户偏好、历史对话关键信息 |
+| 🗄 本地知识库 | RAG 检索个人笔记、文档 |
 | 🎵 媒体播放 | 音乐搜索/下载/播放 |
 | ⏰ 系统工具 | 闹钟、提醒、日历、发微信 |
-| 🗄 本地知识库 | RAG 检索个人笔记、文档 |
 | 🔧 插件系统 | 第三方工具注册机制 |
 
 ## 🚀 长期 (v2.0+)
@@ -73,16 +75,26 @@ voice-assistant/
 │   │   ├── MainActivity.kt          # 主界面
 │   │   ├── VoiceService.kt          # 前台服务，状态机
 │   │   ├── config/ConfigManager.kt  # 配置持久化
-│   │   ├── llm/                     # LLM 后端
-│   │   │   ├── CloudLLMBackend.kt   # DeepSeek API
-│   │   │   └── LocalLLMBackend.kt   # Ollama 本地
+│   │   ├── llm/                     # LLM 后端 + 工具引擎
+│   │   │   ├── LLMBackend.kt        # 通用接口
+│   │   │   ├── CloudLLMBackend.kt   # DeepSeek API + function calling
+│   │   │   ├── LocalLLMBackend.kt   # Ollama 本地
+│   │   │   ├── Tool.kt              # 工具接口定义
+│   │   │   ├── ToolRegistry.kt      # 工具注册中心
+│   │   │   └── ToolCallEngine.kt    # LLM↔工具执行循环
+│   │   ├── tools/                   # 工具实现
+│   │   │   └── ControlTools.kt      # 语音控制工具集
 │   │   └── speech/                  # 语音引擎
 │   │       ├── SherpaAsrEngine.kt   # 离线 ASR
 │   │       ├── SystemTtsEngine.kt   # 系统 TTS
 │   │       └── SherpaTtsEngine.kt   # 离线 TTS (已弃用)
 │   ├── src/main/assets/             # 模型文件 (需单独下载)
 │   └── build.gradle.kts
-└── docs/                            # 项目文档
+├── docs/                            # 项目文档
+│   ├── ROADMAP_zh.md / _en.md
+│   ├── CHANGELOG_zh.md / _en.md
+│   └── plans/                       # 实现计划
+└── CHANGELOG.md                     # (root, deprecated)
 ```
 
 ## 🔗 技术栈
@@ -91,7 +103,8 @@ voice-assistant/
 |----|------|
 | ASR | Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8) |
 | TTS | Android TextToSpeech (悦盟) |
-| LLM | DeepSeek API / Ollama |
+| LLM | DeepSeek API (function calling) / Ollama |
+| 工具框架 | OpenAI function calling 兼容协议 |
 | UI | Jetpack Compose + Material 3 |
-| 音频 | AudioRecord + AEC |
+| 音频 | AudioRecord + AEC + MODE_IN_COMMUNICATION |
 | 构建 | Gradle 9.x + Kotlin 2.x |

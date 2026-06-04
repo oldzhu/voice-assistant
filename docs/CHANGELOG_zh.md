@@ -2,6 +2,26 @@
 
 所有值得注意的变更记录。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 
+## [v1.3] — 2026-06-04
+
+### 新增
+- **工具调用框架**：OpenAI function calling 兼容协议，LLM 可自动调用本地工具
+  - `Tool` 接口：统一的工具定义（name/description/parameters/execute）
+  - `ToolRegistry`：工具注册与执行中心
+  - `ToolCallEngine`：LLM↔工具多轮执行循环（最多 5 轮，30s 超时）
+  - `CloudLLMBackend.chatWithTools()`：发送 tools 定义到 API + 解析 function_call 响应
+- **5 个语音控制工具**，自然语言控制猪头：
+  - `set_speech_rate` — 调节语速（"把语速调到1.5倍"）
+  - `stop_listening` — 停止监听（"别听了"）
+  - `start_listening` — 恢复监听（"开始听"）
+  - `set_barge_in_mode` — 切换打断模式（"切成关键词打断"）
+  - `clear_history` — 清空对话（"忘记之前的对话"）
+
+### 变更
+- `VoiceService.processQuery()` 现在优先走 ToolCallEngine，支持工具调用
+- 升级 ROADMAP：v1.3 完成标记，v1.4 外部工具规划
+- 新增 `tools/` 包，项目结构扩展
+
 ## [v1.2] — 2026-06-04
 
 ### 新增
@@ -15,8 +35,11 @@
 - **状态显示 Bug**：回复完成后状态卡在"回复中"，现在正确切回"监听中"
   - 根因：`startListening()` 直接给 `state` 字段赋值，未走 `updateState()` 通知 UI
   - 修复：改用 `updateState()` 统一状态流转
+- **模式 C 无效 Bug**：`onResult` 条件 `!= "off"` 导致 B/C 行为相同
+  - 修复：加 `bargeInKeywordDetected` 标志，`onPartial` 检测关键词即停 TTS，`onResult` 只处理关键词命中
 
 ### 变更
+- AudioSource → `VOICE_COMMUNICATION` + `MODE_IN_COMMUNICATION`，启用硬件全双工回声消除
 - 修正 ROADMAP 中 v1.1 模型名称（Zipformer → Paraformer）
 - 更新技术栈 ASR 层描述为 Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8)
 
