@@ -35,16 +35,20 @@
 | 🔧 工具调用框架 | OpenAI function calling 兼容 API。Tool 接口 → ToolRegistry → ToolCallEngine 多轮执行循环 |
 | 🎛 语音控制工具 | `set_speech_rate` / `stop_listening` / `start_listening` / `set_barge_in_mode` / `clear_history`——自然语言控制猪头 |
 
+## ✅ 已完成 (v1.3.1)
+
+| 模块 | 说明 |
+|------|------|
+| 🌐 外部联网工具 | `web_search` (DuckDuckGo) / `web_fetch` (网页抓取) / `get_weather` (天气) —— 无需 API key |
+| 💤 休眠状态 | 说"别听了"进入休眠，ASR 继续运行但只响应唤醒词（"开始听"/"猪头回来"），不回复一般语音 |
+| 🐛 DeepSeek 思考模式 | 修复 `reasoning_content` 丢弃导致工具调用 API 400 的 bug |
+
 ## 🔜 短期 (v1.4)
 
-### 1. 外部工具
-- 🌐 网页搜索（DuckDuckGo / SerpAPI）
-- 🌤 天气查询
-- 📄 网页抓取/内容提取
-
-### 2. 唤醒词 / 持续监听
-- 免按按钮，"猪头猪头" 唤醒
-- 静音检测自动休眠
+### 1. 唤醒词 / 省电休眠
+- 免按按钮，"猪头猪头" 常驻唤醒
+- Sherpa-ONNX KeywordSpotter 低功耗唤醒，替代软件层过滤
+- 休眠时省电策略
 
 ## 📅 中期 (v1.5–v2.0)
 
@@ -83,7 +87,8 @@ voice-assistant/
 │   │   │   ├── ToolRegistry.kt      # 工具注册中心
 │   │   │   └── ToolCallEngine.kt    # LLM↔工具执行循环
 │   │   ├── tools/                   # 工具实现
-│   │   │   └── ControlTools.kt      # 语音控制工具集
+│   │   │   ├── ControlTools.kt       # 语音控制工具集 (5 tools)
+│   │   │   └── ExternalTools.kt      # 外部联网工具 (搜索/抓取/天气, 3 tools)
 │   │   └── speech/                  # 语音引擎
 │   │       ├── SherpaAsrEngine.kt   # 离线 ASR
 │   │       ├── SystemTtsEngine.kt   # 系统 TTS

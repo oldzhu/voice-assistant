@@ -148,6 +148,7 @@ class MainActivity : AppCompatActivity() {
             VoiceService.State.THINKING -> "🧠 思考中…"
             VoiceService.State.SPEAKING -> "🔊 回复中…"
             VoiceService.State.STOPPED -> "已停止"
+            VoiceService.State.DORMANT -> "💤 休眠中…"
         }
 
         if (text != null && text.isNotBlank()) {

@@ -35,16 +35,20 @@
 | 🔧 Tool Calling Framework | OpenAI function calling compatible. Tool interface → ToolRegistry → ToolCallEngine multi-turn execution loop |
 | 🎛 Voice Control Tools | `set_speech_rate` / `stop_listening` / `start_listening` / `set_barge_in_mode` / `clear_history` — control the assistant via natural language |
 
+## ✅ Completed (v1.3.1)
+
+| Module | Description |
+|--------|-------------|
+| 🌐 External Web Tools | `web_search` (DuckDuckGo) / `web_fetch` (page fetch) / `get_weather` — no API key required |
+| 💤 Dormant State | Say "stop listening" to sleep; ASR keeps running, only wake phrases ("start listening" / "come back") accepted |
+| 🐛 DeepSeek Thinking Fix | Preserve `reasoning_content` in multi-turn tool calls to avoid API 400 errors |
+
 ## 🔜 Near-term (v1.4)
 
-### 1. External Tools
-- 🌐 Web search (DuckDuckGo / SerpAPI)
-- 🌤 Weather lookup
-- 📄 Web fetch / content extraction
-
-### 2. Wake Word / Always Listening
-- Hands-free "pig head pig head" wake word
-- Silence detection for auto-sleep
+### 1. Wake Word / Low-power Sleep
+- Hands-free "pig head pig head" always-on wake word
+- Sherpa-ONNX KeywordSpotter for low-power listening, replacing software filtering
+- Battery-efficient sleep strategy
 
 ## 📅 Mid-term (v1.5–v2.0)
 
@@ -83,7 +87,8 @@ voice-assistant/
 │   │   │   ├── ToolRegistry.kt      # Tool registration hub
 │   │   │   └── ToolCallEngine.kt    # LLM↔tool execution loop
 │   │   ├── tools/                   # Tool implementations
-│   │   │   └── ControlTools.kt      # Voice control toolset
+│   │   │   ├── ControlTools.kt       # Voice control toolset (5 tools)
+│   │   │   └── ExternalTools.kt      # External tools (search/fetch/weather, 3 tools)
 │   │   └── speech/                  # Speech engines
 │   │       ├── SherpaAsrEngine.kt   # Offline ASR
 │   │       ├── SystemTtsEngine.kt   # System TTS

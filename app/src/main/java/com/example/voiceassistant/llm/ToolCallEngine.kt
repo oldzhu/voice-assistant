@@ -68,7 +68,7 @@ class ToolCallEngine(
         while (turn < maxTurns) {
             turn++
             val toolCount = toolRegistry.getAll().size
-            Log.d(TAG, "Turn $turn: messages=${messages.size}, tools=$toolCount")
+            Log.i(TAG, "Turn $turn: messages=${messages.size}, tools=$toolCount")
 
             val result = llmBackend.chatWithTools(messages, toolRegistry.getFunctionDefs())
             if (result.isFailure) {
@@ -80,7 +80,7 @@ class ToolCallEngine(
 
             // --- Case 1: Text response → we're done ---
             if (toolResult.textResponse != null) {
-                Log.d(TAG, "Turn $turn: text response (${toolResult.textResponse.length} chars)")
+                Log.i(TAG, "Turn $turn: text response (${toolResult.textResponse.length} chars)")
                 return Result.success(toolResult.textResponse)
             }
 
@@ -97,20 +97,32 @@ class ToolCallEngine(
             val toolOutput = toolRegistry.execute(funcName, funcArgs)
             Log.i(TAG, "Turn $turn: tool output → ${toolOutput.take(100)}")
 
-            // Add assistant message with tool_call (tells LLM what it asked for)
-            val toolCallId = "call_${funcName}_$turn"
-            messages.add(mapOf(
-                "role" to "assistant",
-                "content" to null,
-                "tool_calls" to listOf(mapOf(
-                    "id" to toolCallId,
-                    "type" to "function",
-                    "function" to mapOf(
-                        "name" to funcName,
-                        "arguments" to gson.toJson(funcArgs)
-                    )
+            // Add assistant message — use the raw message from LLM to preserve
+            // fields like reasoning_content (DeepSeek thinking mode requires this)
+            val rawMsg = toolResult.rawAssistantMessage
+            val toolCallId: String
+            if (rawMsg != null) {
+                messages.add(rawMsg)
+                // Extract the tool_call id from the raw message for the tool result
+                @Suppress("UNCHECKED_CAST")
+                val tcs = rawMsg["tool_calls"] as? List<Map<String, Any?>>
+                toolCallId = tcs?.firstOrNull()?.get("id") as? String
+                    ?: "call_${funcName}_$turn"
+            } else {
+                toolCallId = "call_${funcName}_$turn"
+                messages.add(mapOf(
+                    "role" to "assistant",
+                    "content" to null,
+                    "tool_calls" to listOf(mapOf(
+                        "id" to toolCallId,
+                        "type" to "function",
+                        "function" to mapOf(
+                            "name" to funcName,
+                            "arguments" to gson.toJson(funcArgs)
+                        )
+                    ))
                 ))
-            ))
+            }
 
             // Add tool result message (the tool's output)
             messages.add(mapOf(

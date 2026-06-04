@@ -2,6 +2,28 @@
 
 所有值得注意的变更记录。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 
+## [v1.3.1] — 2026-06-04
+
+### 新增
+- **外部联网工具**：3 个网络工具，LLM 可自行搜索和获取信息
+  - `web_search` — DuckDuckGo 网页搜索（无需 API key）
+  - `web_fetch` — 抓取网页内容并提取纯文本
+  - `get_weather` — wttr.in 天气查询（无需 API key）
+- **休眠状态 (DORMANT)**：说 "别听了" 进入休眠
+  - ASR 继续监听但不回复一般语音，仅响应唤醒词（"开始听"/"猪头回来"等）
+  - 进入休眠后 LLM 确认消息被静默吞掉，不播报
+  - UI 显示 "💤 休眠中"
+
+### 修复
+- **DeepSeek 思考模式兼容**：开启推理模式后 `reasoning_content` 必须原样传回，否则 API 400
+  - `CloudLLMBackend.chatWithTools()` 保留原始消息对象，第二轮请求携带 `reasoning_content`
+  - `ToolCallEngine` 从原始消息提取 `tool_call_id`，避免丢失 DeepSeek 特有字段
+- **休眠 TTS 串扰**：`processQuery()` 检测到 DORMANT 状态时直接 return，不播报 LLM 回复
+
+### 变更
+- `stop_listening` 工具不再完全停 ASR → 改为进入 DORMANT 状态
+- 工具总数：5 个控制工具 + 3 个外部工具 = 8 个
+
 ## [v1.3] — 2026-06-04
 
 ### 新增

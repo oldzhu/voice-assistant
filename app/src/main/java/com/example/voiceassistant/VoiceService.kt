@@ -57,6 +57,8 @@ class VoiceService : Service(), LifecycleOwner {
         const val ACTION_TEST_TTS = "com.example.voiceassistant.TEST_TTS"
         const val TEST_TEXT = "我是猪头您的手机个人语音助手"
         private const val MAX_TEST_ATTEMPTS = 3
+        // Wake phrases that resume from DORMANT state
+        private val WAKE_PHRASES = listOf("开始听", "开始监听", "继续", "回来", "猪头回来", "猪头")
     }
 
     private fun debugLog(msg: String) {
@@ -68,7 +70,7 @@ class VoiceService : Service(), LifecycleOwner {
         } catch (_: Exception) {}
     }
 
-    enum class State { STOPPED, INITIALIZING, LISTENING, THINKING, SPEAKING }
+    enum class State { STOPPED, INITIALIZING, LISTENING, THINKING, SPEAKING, DORMANT }
 
     private val binder = LocalBinder()
     private lateinit var lifecycleRegistry: LifecycleRegistry
@@ -235,8 +237,8 @@ class VoiceService : Service(), LifecycleOwner {
                     sysTtsEngine?.setSpeechRate(rate)
                 })
                 register(StopListeningTool {
-                    asrEngine?.stop()
-                    updateState(State.STOPPED)
+                    // Don't stop ASR — just go dormant (listens for wake phrase only)
+                    updateState(State.DORMANT)
                 })
                 register(StartListeningTool {
                     lifecycleScope.launch { startListening() }
@@ -324,6 +326,17 @@ class VoiceService : Service(), LifecycleOwner {
         if (text.isBlank()) return
         if (testMode) {
             onTestAsrResult(text)
+            return
+        }
+        // Dormant mode: only wake phrases pass through, everything else silently ignored
+        if (state == State.DORMANT) {
+            val matched = WAKE_PHRASES.any { text.contains(it) }
+            if (matched) {
+                debugLog("Wake phrase detected in dormant: '$text'")
+                startListening()
+            } else {
+                debugLog("Dormant — ignoring: '$text'")
+            }
             return
         }
         updateState(State.THINKING, text)
@@ -466,6 +479,11 @@ class VoiceService : Service(), LifecycleOwner {
             conversationHistory.add(LLMBackend.ChatMessage("assistant", response))
             if (conversationHistory.size > HISTORY_MAX_SIZE) conversationHistory.removeAt(0)
             saveConversationLine("🐷 猪头", response)
+            // If tool execution put us in DORMANT, don't speak — stay dormant
+            if (state == State.DORMANT) {
+                debugLog("In DORMANT after tool call, suppressing TTS response")
+                return
+            }
             updateState(State.SPEAKING, response)
             speakTts(response)
         } catch (e: Exception) {
@@ -512,6 +530,7 @@ class VoiceService : Service(), LifecycleOwner {
             State.LISTENING -> "正在听..."
             State.THINKING -> "思考中..."
             State.SPEAKING -> "说话中..."
+            State.DORMANT -> "休眠中（说'开始听'唤醒）"
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("猪头助手")

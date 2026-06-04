@@ -97,7 +97,8 @@ class CloudLLMBackend(
      */
     data class ToolChatResult(
         val textResponse: String?,
-        val functionCall: Pair<String, Map<String, Any?>>? // (function_name, args)
+        val functionCall: Pair<String, Map<String, Any?>>?, // (function_name, args)
+        val rawAssistantMessage: Map<String, Any?>? = null  // full message from LLM (includes reasoning_content, etc.)
     )
 
     /**
@@ -124,7 +125,7 @@ class CloudLLMBackend(
             )
 
             val jsonBody = gson.toJson(requestBody)
-            Log.d(TAG, "ToolChat request: ${jsonBody.take(300)}...")
+            Log.i(TAG, "ToolChat request: ${jsonBody.take(300)}...")
 
             val request = Request.Builder()
                 .url("$baseUrl/v1/chat/completions")
@@ -137,8 +138,8 @@ class CloudLLMBackend(
             val body = response.body?.string() ?: ""
 
             if (!response.isSuccessful) {
-                Log.e(TAG, "ToolChat error: ${response.code} — $body")
-                return@withContext Result.failure(Exception("API error ${response.code}"))
+                Log.e(TAG, "ToolChat error ${response.code}: $body")
+                return@withContext Result.failure(Exception("API ${response.code}: ${body.take(200)}"))
             }
 
             // Parse as raw Map to handle both text and tool_calls
@@ -172,10 +173,11 @@ class CloudLLMBackend(
                         Log.e(TAG, "Failed to parse tool args: $argsJson", e)
                         emptyMap()
                     }
-                    Log.d(TAG, "ToolChat: function_call → $funcName($args)")
+                    Log.i(TAG, "ToolChat: function_call → $funcName($args)")
                     Result.success(ToolChatResult(
                         textResponse = null,
-                        functionCall = Pair(funcName, args)
+                        functionCall = Pair(funcName, args),
+                        rawAssistantMessage = message
                     ))
                 } else {
                     Result.success(ToolChatResult(null, null))

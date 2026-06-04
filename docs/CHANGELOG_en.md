@@ -2,6 +2,28 @@
 
 All notable changes are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [v1.3.1] — 2026-06-04
+
+### Added
+- **External web tools**: 3 network tools enabling LLM to search and fetch info
+  - `web_search` — DuckDuckGo web search (no API key needed)
+  - `web_fetch` — Fetch webpage and extract plain text
+  - `get_weather` — wttr.in weather lookup (no API key needed)
+- **Dormant state (DORMANT)**: say "stop listening" to enter sleep mode
+  - ASR keeps running but ignores general speech, only responds to wake phrases ("start listening", "come back", etc.)
+  - LLM confirmation message is silently swallowed when entering dormant
+  - UI shows "💤 Dormant"
+
+### Fixed
+- **DeepSeek thinking mode**: when reasoning is enabled, `reasoning_content` must be passed back verbatim or API returns 400
+  - `CloudLLMBackend.chatWithTools()` preserves raw message objects with `reasoning_content`
+  - `ToolCallEngine` extracts `tool_call_id` from original messages, preserving DeepSeek-specific fields
+- **Dormant TTS crosstalk**: `processQuery()` checks for DORMANT state and returns early, suppressing the LLM confirmation message
+
+### Changed
+- `stop_listening` tool no longer fully stops ASR → enters DORMANT state instead
+- Total tools: 5 control + 3 external = 8
+
 ## [v1.3] — 2026-06-04
 
 ### Added
