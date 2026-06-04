@@ -45,10 +45,17 @@
 
 ## 🔜 短期 (v1.4)
 
-### 1. 唤醒词 / 省电休眠
+### 1. MCP Client
+- 接入 Model Context Protocol，连接外部 tool server
+- 支持 stdio / HTTP transport
+- MCP 工具自动注册到 ToolRegistry
+
+### 2. 唤醒词 / 省电休眠
 - 免按按钮，"猪头猪头" 常驻唤醒
-- Sherpa-ONNX KeywordSpotter 低功耗唤醒，替代软件层过滤
+- Sherpa-ONNX KeywordSpotter 低功耗唤醒
 - 休眠时省电策略
+
+> 完整蓝图见 [docs/plans/2026-06-04-agent-20-blueprint.md](plans/2026-06-04-agent-20-blueprint.md)
 
 ## 📅 中期 (v1.5–v2.0)
 

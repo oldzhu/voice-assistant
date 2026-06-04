@@ -45,10 +45,17 @@
 
 ## 🔜 Near-term (v1.4)
 
-### 1. Wake Word / Low-power Sleep
+### 1. MCP Client
+- Connect to Model Context Protocol servers for external tools
+- Support stdio / HTTP transports
+- MCP tools auto-registered to ToolRegistry
+
+### 2. Wake Word / Low-power Sleep
 - Hands-free "pig head pig head" always-on wake word
-- Sherpa-ONNX KeywordSpotter for low-power listening, replacing software filtering
+- Sherpa-ONNX KeywordSpotter for low-power listening
 - Battery-efficient sleep strategy
+
+> Full blueprint: [docs/plans/2026-06-04-agent-20-blueprint.md](plans/2026-06-04-agent-20-blueprint.md)
 
 ## 📅 Mid-term (v1.5–v2.0)
 
