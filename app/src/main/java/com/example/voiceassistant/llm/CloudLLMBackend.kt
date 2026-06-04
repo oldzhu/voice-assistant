@@ -12,10 +12,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
- * Cloud LLM backend via OpenAI-compatible API (DeepSeek, OpenAI, etc.)
+ * Cloud LLM backend via OpenAI-compatible API (DeepSeek, OpenAI, etc.).
  *
- * Supports both streaming (SSE) and non-streaming modes.
- * Default: non-streaming for simpler integration with TTS.
+ * Supports:
+ * - Standard chat (non-streaming) via [chat]
+ * - Function calling via [chatWithTools]
  */
 class CloudLLMBackend(
     private val apiKey: String,
@@ -36,6 +37,10 @@ class CloudLLMBackend(
         .build()
 
     private val gson = Gson()
+
+    // ==================================================================
+    // Standard chat (existing, unchanged API)
+    // ==================================================================
 
     override suspend fun chat(
         userMessage: String,
@@ -80,6 +85,116 @@ class CloudLLMBackend(
         }
     }
 
+    // ==================================================================
+    // Function calling
+    // ==================================================================
+
+    /**
+     * Result of a tool-enabled chat call.
+     *
+     * - If [textResponse] is non-null: LLM produced a final text answer; done.
+     * - If [functionCall] is non-null: LLM wants to call a tool.
+     */
+    data class ToolChatResult(
+        val textResponse: String?,
+        val functionCall: Pair<String, Map<String, Any?>>? // (function_name, args)
+    )
+
+    /**
+     * Send a chat request with tool definitions.
+     *
+     * @param messages Full message list as Maps (supports tool-role messages
+     *                 that don't fit the simple ChatMessage model).
+     * @param functionDefs Tool definitions from [Tool.toFunctionDef].
+     * @return Either a text response or a function_call to execute.
+     */
+    suspend fun chatWithTools(
+        messages: List<Map<String, Any?>>,
+        functionDefs: List<Map<String, Any?>>
+    ): Result<ToolChatResult> = withContext(Dispatchers.IO) {
+        try {
+            val requestBody = mapOf<String, Any?>(
+                "model" to model,
+                "messages" to messages,
+                "stream" to false,
+                "max_tokens" to 500,
+                "temperature" to 0.7,
+                "tools" to functionDefs,
+                "tool_choice" to "auto"
+            )
+
+            val jsonBody = gson.toJson(requestBody)
+            Log.d(TAG, "ToolChat request: ${jsonBody.take(300)}...")
+
+            val request = Request.Builder()
+                .url("$baseUrl/v1/chat/completions")
+                .addHeader("Authorization", "Bearer $apiKey")
+                .addHeader("Content-Type", "application/json")
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: ""
+
+            if (!response.isSuccessful) {
+                Log.e(TAG, "ToolChat error: ${response.code} — $body")
+                return@withContext Result.failure(Exception("API error ${response.code}"))
+            }
+
+            // Parse as raw Map to handle both text and tool_calls
+            @Suppress("UNCHECKED_CAST")
+            val json = gson.fromJson(body, Map::class.java) as Map<String, Any?>
+            val choices = json["choices"] as? List<Map<String, Any?>> ?: emptyList()
+            val choice = choices.firstOrNull()
+
+            if (choice == null) {
+                return@withContext Result.success(ToolChatResult("", null))
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            val message = choice["message"] as? Map<String, Any?>
+            val finishReason = choice["finish_reason"] as? String ?: "stop"
+
+            if (finishReason == "tool_calls") {
+                @Suppress("UNCHECKED_CAST")
+                val toolCalls = message?.get("tool_calls") as? List<Map<String, Any?>>
+                val tc = toolCalls?.firstOrNull()
+                @Suppress("UNCHECKED_CAST")
+                val func = tc?.get("function") as? Map<String, Any?>
+                if (func != null) {
+                    val funcName = func["name"] as? String ?: ""
+                    val argsJson = func["arguments"] as? String ?: "{}"
+                    val args: Map<String, Any?> = try {
+                        @Suppress("UNCHECKED_CAST")
+                        (gson.fromJson(argsJson, Map::class.java) as? Map<String, Any?>)
+                            ?: emptyMap()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse tool args: $argsJson", e)
+                        emptyMap()
+                    }
+                    Log.d(TAG, "ToolChat: function_call → $funcName($args)")
+                    Result.success(ToolChatResult(
+                        textResponse = null,
+                        functionCall = Pair(funcName, args)
+                    ))
+                } else {
+                    Result.success(ToolChatResult(null, null))
+                }
+            } else {
+                val content = message?.get("content") as? String ?: ""
+                Log.d(TAG, "ToolChat: text response (${content.length} chars)")
+                Result.success(ToolChatResult(content.trim(), null))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "ToolChat failed", e)
+            Result.failure(e)
+        }
+    }
+
+    // ==================================================================
+    // Message construction
+    // ==================================================================
+
     private fun buildMessages(
         userMessage: String,
         history: List<LLMBackend.ChatMessage>
@@ -97,7 +212,9 @@ class CloudLLMBackend(
         return messages
     }
 
-    // --- Data classes for JSON serialization ---
+    // ==================================================================
+    // Data classes for JSON serialization
+    // ==================================================================
 
     data class ChatRequest(
         val model: String,
@@ -108,17 +225,18 @@ class CloudLLMBackend(
     )
 
     data class Message(
-        val role: String,
-        val content: String
+        @SerializedName("role") val role: String,
+        @SerializedName("content") val content: String?
     )
 
     data class ChatResponse(
-        val id: String?,
-        val choices: List<Choice>?
+        @SerializedName("id") val id: String?,
+        @SerializedName("choices") val choices: List<Choice>?
     )
 
     data class Choice(
-        val index: Int?,
-        val message: Message?
+        @SerializedName("index") val index: Int?,
+        @SerializedName("message") val message: Message?,
+        @SerializedName("finish_reason") val finishReason: String?
     )
 }
