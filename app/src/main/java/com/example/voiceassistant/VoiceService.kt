@@ -28,6 +28,9 @@ import com.example.voiceassistant.tools.StopListeningTool
 import com.example.voiceassistant.tools.StartListeningTool
 import com.example.voiceassistant.tools.SetBargeInModeTool
 import com.example.voiceassistant.tools.ClearHistoryTool
+import com.example.voiceassistant.tools.WebSearchTool
+import com.example.voiceassistant.tools.WebFetchTool
+import com.example.voiceassistant.tools.WeatherTool
 import com.example.voiceassistant.speech.SherpaAsrEngine
 import com.example.voiceassistant.speech.SherpaTtsEngine
 import com.example.voiceassistant.speech.SystemTtsEngine
@@ -244,6 +247,10 @@ class VoiceService : Service(), LifecycleOwner {
                 register(ClearHistoryTool {
                     conversationHistory.clear()
                 })
+                // External tools
+                register(WebSearchTool())
+                register(WebFetchTool())
+                register(WeatherTool())
             }
             toolCallEngine = ToolCallEngine(cloudBackend, toolRegistry)
             debugLog("Tools registered: ${toolRegistry.getAll().map { it.name }}")
