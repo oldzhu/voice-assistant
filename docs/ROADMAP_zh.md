@@ -1,123 +1,60 @@
-# 猪头助手 — 项目路线图
+# 猪头助手 — 开发路线图 (Roadmap)
 
-> 手机端离线语音助手 Agent，目标对标 Hermes / OpenClaw
+## 已完成 ✅
 
-## ✅ 已完成 (v1.0)
+### v1 — 核心语音管道
+- Sherpa-ONNX ASR（Paraformer 中英双语流式）
+- 系统 TTS（悦盟引擎，275 音色）
+- 前台 Service 常驻监听
+- DORMANT 休眠/唤醒状态机
+- 打断模式（off/on/keyword）+ AEC
 
-| 模块 | 说明 |
-|------|------|
-| 🎤 语音识别 (ASR) | Sherpa-ONNX Zipformer CTC，离线中文识别 |
-| 🧠 LLM 对话 | DeepSeek API，流式对话 |
-| 🔊 语音合成 (TTS) | 系统 TTS（悦盟引擎），275 种语音，中文清晰 |
-| 🔇 回声消除 (AEC) | AudioRecord AEC，防 TTS 自循环 |
-| ⚡ 语速调节 | 0.5x–2.5x 可调，设置界面滑块 |
-| 📋 对话历史 | 备份/恢复/删除，本地存储 |
+### v2 — LLM 工具调用
+- ToolCallEngine + 13 个工具
+- 多 tool_call 修复（DeepSeek API 400）
+- 自我优化 L2（update_config）+ L4（remember/what_do_you_know）
+- 外部工具（天气/新闻/定位/网页抓取）
+- 位置感知（GPS + 逆地理编码）
 
-## ✅ 已完成 (v1.1)
+### v3 — 自动测试框架
+- TestEngine 标记系统（Python runner 解析）
+- 5 个核心测试 + 7 个直接工具测试 + 1 个 LLM 介导测试 = 13 个
+- 声学往返测试（TTS→mic→ASR→相似度）
+- Test-First 开发规则
 
-| 模块 | 说明 |
-|------|------|
-| 🌐 双语 ASR | 升级为 Paraformer 双语模型 (`sherpa-onnx-streaming-paraformer-bilingual-zh-en`)，支持中英混杂 |
-| 📡 流式识别 | OfflineRecognizer → OnlineRecognizer，边说边出字，内置端点检测 |
+---
 
-## ✅ 已完成 (v1.2)
+## 待讨论 📋
 
-| 模块 | 说明 |
-|------|------|
-| 🗣 打断模式 | 三种模式可切换：A 关闭打断 / B 语音打断 / C 关键词打断（默认 "猪头"） |
-| 📊 状态显示 | 修复回复完成后状态卡在"回复中"的 bug，正确切回"监听中" |
-| 🔊 全双工回声消除 | AudioSource → VOICE_COMMUNICATION + MODE_IN_COMMUNICATION，硬件 AEC 兼容打断模式 |
+### 选项 A：L3 自生成 MCP 工具 🧠
+**功能**：LLM 给自己写工具脚本。用户"我需要汇率转换"→ LLM 生成 Python→stdio MCP 启动→注册 ToolRegistry。
+**自动测试**：`tool_mcp_create` — 生成简单 tool → 验证注册成功 → 执行正确。
+**难度**：中。架构已就绪（StdioMcpTransport + McpClient）。
 
-## ✅ 已完成 (v1.3)
+### 选项 B：会话持久化 💾
+**功能**：app 重启恢复上次对话。手机杀进程后不丢失上下文。
+**自动测试**：`tool_persistence` — 模拟对话 → 序列化 → 反序列化 → LLM 引用历史。
+**难度**：低。SharedPreferences + JSON。
 
-| 模块 | 说明 |
-|------|------|
-| 🔧 工具调用框架 | OpenAI function calling 兼容 API。Tool 接口 → ToolRegistry → ToolCallEngine 多轮执行循环 |
-| 🎛 语音控制工具 | `set_speech_rate` / `stop_listening` / `start_listening` / `set_barge_in_mode` / `clear_history`——自然语言控制猪头 |
+### 选项 C：定时提醒/闹钟 ⏰
+**功能**："15 分钟后提醒我喝水"→ AlarmManager 定时 → TTS 播报。
+**自动测试**：`tool_reminder` — 注册闹钟 → `dumpsys alarm` 验证。
+**难度**：中。需要精准的 AlarmManager + 前台 Service 唤醒。
 
-## ✅ 已完成 (v1.3.1)
+### 选项 D：清理 + 加固 🧹
+- 删除旧 `runTtsTest()` 重复触发
+- 添加 `tool_weather` 测试
+- 网络断开错误边界测试
+**自动测试**：`tool_weather` + `tool_network_error`
+**难度**：低。主要是清理和补测试。
 
-| 模块 | 说明 |
-|------|------|
-| 🌐 外部联网工具 | `web_search` (DuckDuckGo) / `web_fetch` (网页抓取) / `get_weather` (天气) —— 无需 API key |
-| 💤 休眠状态 | 说"别听了"进入休眠，ASR 继续运行但只响应唤醒词（"开始听"/"猪头回来"），不回复一般语音 |
-| 🐛 DeepSeek 思考模式 | 修复 `reasoning_content` 丢弃导致工具调用 API 400 的 bug |
+### 选项 E：媒体搜索 + 播放 🎵
+**功能**：搜歌曲/视频/小说 → 不是只给链接，而是播放。
+- **小说**：web_fetch 抓内容 → TTS 朗读 ✅ 已有能力
+- **歌曲**：搜到后跳转音乐 App（Intent）或找免费音频源
+- **视频**：搜到后 `Intent.ACTION_VIEW` 打开 YouTube/B站
+**自动测试**：`tool_media_search` — 搜索 → 验证返回可播放内容。
+**难度**：小说低、歌曲高、视频中。
 
-## ✅ 已完成 (v1.4)
-
-| 模块 | 说明 |
-|------|------|
-| 🔌 MCP Client | 连接 MCP server，自动发现工具。支持 stdio (ProcessBuilder) + HTTP (OkHttp)。JSON-RPC 2.0 协议 |
-
-## 🔜 短期 (v1.5)
-
-### 1. 唤醒词 / 省电休眠
-- 免按按钮，"猪头猪头" 常驻唤醒
-- Sherpa-ONNX KeywordSpotter 低功耗唤醒
-- 休眠时省电策略
-
-> 完整蓝图见 [docs/plans/2026-06-04-agent-20-blueprint.md](plans/2026-06-04-agent-20-blueprint.md)
-
-## 📅 中期 (v1.5–v2.0)
-
-| 模块 | 说明 |
-|------|------|
-| 🧠 上下文记忆 | 记住用户偏好、历史对话关键信息 |
-| 🗄 本地知识库 | RAG 检索个人笔记、文档 |
-| 🎵 媒体播放 | 音乐搜索/下载/播放 |
-| ⏰ 系统工具 | 闹钟、提醒、日历、发微信 |
-| 🔧 插件系统 | 第三方工具注册机制 |
-
-## 🚀 长期 (v2.0+)
-
-| 模块 | 说明 |
-|------|------|
-| 📈 投资工具 | 行情查询、策略回测、下单 |
-| 📷 多模态 | 拍照识别、屏幕理解 |
-| 🤖 Agent 编排 | 多步骤任务自动编排（类似 Hermes） |
-| 🔗 多设备同步 | 手机 ↔ 电脑 ↔ 服务器 |
-| 🗣 人格系统 | 自定义助手性格、记忆 |
-
-## 📂 项目结构
-
-```
-voice-assistant/
-├── app/
-│   ├── src/main/java/com/example/voiceassistant/
-│   │   ├── MainActivity.kt          # 主界面
-│   │   ├── VoiceService.kt          # 前台服务，状态机
-│   │   ├── config/ConfigManager.kt  # 配置持久化
-│   │   ├── llm/                     # LLM 后端 + 工具引擎
-│   │   │   ├── LLMBackend.kt        # 通用接口
-│   │   │   ├── CloudLLMBackend.kt   # DeepSeek API + function calling
-│   │   │   ├── LocalLLMBackend.kt   # Ollama 本地
-│   │   │   ├── Tool.kt              # 工具接口定义
-│   │   │   ├── ToolRegistry.kt      # 工具注册中心
-│   │   │   └── ToolCallEngine.kt    # LLM↔工具执行循环
-│   │   ├── tools/                   # 工具实现
-│   │   │   ├── ControlTools.kt       # 语音控制工具集 (5 tools)
-│   │   │   └── ExternalTools.kt      # 外部联网工具 (搜索/抓取/天气, 3 tools)
-│   │   └── speech/                  # 语音引擎
-│   │       ├── SherpaAsrEngine.kt   # 离线 ASR
-│   │       ├── SystemTtsEngine.kt   # 系统 TTS
-│   │       └── SherpaTtsEngine.kt   # 离线 TTS (已弃用)
-│   ├── src/main/assets/             # 模型文件 (需单独下载)
-│   └── build.gradle.kts
-├── docs/                            # 项目文档
-│   ├── ROADMAP_zh.md / _en.md
-│   ├── CHANGELOG_zh.md / _en.md
-│   └── plans/                       # 实现计划
-└── CHANGELOG.md                     # (root, deprecated)
-```
-
-## 🔗 技术栈
-
-| 层 | 技术 |
-|----|------|
-| ASR | Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8) |
-| TTS | Android TextToSpeech (悦盟) |
-| LLM | DeepSeek API (function calling) / Ollama |
-| 工具框架 | OpenAI function calling 兼容协议 |
-| UI | Jetpack Compose + Material 3 |
-| 音频 | AudioRecord + AEC + MODE_IN_COMMUNICATION |
-| 构建 | Gradle 9.x + Kotlin 2.x |
+### 选项 F：用户提议的其他功能
+（待讨论补充）

@@ -14,8 +14,8 @@ import java.util.concurrent.TimeUnit
 // ==================================================================
 
 private val httpClient = OkHttpClient.Builder()
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(30, TimeUnit.SECONDS)
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .readTimeout(15, TimeUnit.SECONDS)
     .build()
 
 private val gson = Gson()
@@ -114,26 +114,31 @@ class WebFetchTool : Tool {
                 .header("User-Agent", "Mozilla/5.0 VoiceAssistant/1.0")
                 .build()
             val response = httpClient.newCall(request).execute()
-            val html = response.body?.string() ?: return@withContext "网页内容为空"
+            val rawHtml = response.body?.string() ?: return@withContext "网页内容为空"
 
-            // Extract title
+            // SAFETY: Truncate HTML to 200KB before regex processing.
+            // Large news pages can be several MB — regex on full HTML causes
+            // catastrophic backtracking (ReDoS) → OOM crash / ANR.
+            val html = if (rawHtml.length > 200_000) rawHtml.take(200_000) else rawHtml
+
+            // Extract title (small, safe regex)
             val title = Regex("<title[^>]*>(.*?)</title>", RegexOption.IGNORE_CASE)
-                .find(html)?.groupValues?.get(1)?.trim() ?: ""
+                .find(html.take(2000))?.groupValues?.get(1)?.trim() ?: ""
 
-            // Strip HTML tags and extract body text
-            val bodyOpts = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
-            val bodyText = Regex("<body[^>]*>(.*?)</body>", bodyOpts)
-                .find(html)?.groupValues?.get(1) ?: html
-
-            val stripped = bodyText
-                .replace(Regex("<script[^>]*>.*?</script>", bodyOpts), "")
-                .replace(Regex("<style[^>]*>.*?</style>", bodyOpts), "")
+            // Strip tags sequentially (no .* across whole document — O(n) per pass)
+            val stripped = html
+                // Remove script + style blocks (lazy quantifier, bounded)
+                .replace(Regex("<script[^>]*>.*?</script>", setOf(RegexOption.IGNORE_CASE)), " ")
+                .replace(Regex("<style[^>]*>.*?</style>", setOf(RegexOption.IGNORE_CASE)), " ")
+                // Remove all HTML tags
                 .replace(Regex("<[^>]+>"), " ")
-                .replace(Regex("&nbsp;"), " ")
-                .replace(Regex("&amp;"), "&")
-                .replace(Regex("&lt;"), "<")
-                .replace(Regex("&gt;"), ">")
-                .replace(Regex("&quot;"), "\"")
+                // Decode entities
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                // Collapse whitespace
                 .replace(Regex("\\s+"), " ")
                 .trim()
 

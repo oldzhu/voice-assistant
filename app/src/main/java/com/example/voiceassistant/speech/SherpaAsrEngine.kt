@@ -49,6 +49,9 @@ class SherpaAsrEngine(private val context: Context) {
     private var aec: AcousticEchoCanceler? = null
     private var recordingJob: Job? = null
 
+    // Switchable audio source: VOICE_COMMUNICATION (user mode, AEC on) vs VOICE_RECOGNITION (test mode, permissive)
+    @Volatile var audioSource: Int = MediaRecorder.AudioSource.VOICE_COMMUNICATION
+
     private var onResultCallback: ((String) -> Unit)? = null
     private var onPartialCallback: ((String) -> Unit)? = null
     private var onErrorCallback: ((String) -> Unit)? = null
@@ -119,8 +122,10 @@ class SherpaAsrEngine(private val context: Context) {
         ) * 2
 
         try {
+            val src = audioSource
+            debugLog("AudioRecord source: ${if (src == MediaRecorder.AudioSource.VOICE_COMMUNICATION) "VOICE_COMMUNICATION" else "VOICE_RECOGNITION"}")
             audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                src,
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
@@ -137,16 +142,21 @@ class SherpaAsrEngine(private val context: Context) {
             audioRecord?.startRecording()
             debugLog("AudioRecord started, buffer=$bufferSize")
 
-            try {
-                if (AcousticEchoCanceler.isAvailable()) {
-                    aec = AcousticEchoCanceler.create(audioRecord!!.audioSessionId)
-                    aec?.enabled = true
-                    debugLog("AEC enabled")
-                } else {
-                    debugLog("AEC not available on this device")
+            // AEC: only for VOICE_COMMUNICATION mode (user mode). Skip in test mode.
+            if (src == MediaRecorder.AudioSource.VOICE_COMMUNICATION) {
+                try {
+                    if (AcousticEchoCanceler.isAvailable()) {
+                        aec = AcousticEchoCanceler.create(audioRecord!!.audioSessionId)
+                        aec?.enabled = true
+                        debugLog("AEC enabled")
+                    } else {
+                        debugLog("AEC not available on this device")
+                    }
+                } catch (e: Exception) {
+                    debugLog("AEC setup failed: ${e.message}")
                 }
-            } catch (e: Exception) {
-                debugLog("AEC setup failed: ${e.message}")
+            } else {
+                debugLog("AEC skipped (permissive/test mode)")
             }
 
             recordingJob = CoroutineScope(Dispatchers.IO).launch {

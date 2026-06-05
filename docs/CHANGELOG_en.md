@@ -2,6 +2,30 @@
 
 All notable changes are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [v1.5] — 2026-06-05
+
+### Added
+- **Article Reading Tool (`read_article`)**: Search + fetch + clean web content for TTS narration
+  - Supports both `query` (Bing search with Baidu fallback) and `url` input modes
+  - Smart text cleaning: strips nav/ads/script residue, extracts main content
+  - Long article truncation (1500 chars) with "say continue for next section" prompt
+  - System prompt: well-known poems recited directly by LLM, no tool needed
+- **Auto-tests expanded to 14**:
+  - `tool_read_article` — direct tool test (URL fetch validation)
+  - `tool_location`, `tool_news`, `tool_web_fetch` — external tool direct tests
+  - `tool_config`, `tool_memory`, `tool_barge_in`, `tool_clear_history` — local tool direct tests
+  - `llm_multi_tool` — multi-tool-call regression test (prevents API 400)
+- **Test-First development rule**: every new feature requires auto test design before coding
+
+### Fixed
+- **Post-test hang**: `runTest()` didn't reset `testMode=false` + `startListening()`, leaving app unresponsive
+- **read_article timeout**: search backend changed from DuckDuckGo to Bing (China-accessible), Baidu fallback
+
+### Documentation
+- `docs/ROADMAP_zh.md` / `docs/ROADMAP_en.md` — roadmap
+- `docs/TESTING_zh.md` / `docs/TESTING_en.md` — complete test docs (14 tests)
+- Skill `auto-test-framework.md` — test architecture + Test-First workflow
+
 ## [v1.4] — 2026-06-04
 
 ### Added

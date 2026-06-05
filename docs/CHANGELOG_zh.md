@@ -2,6 +2,30 @@
 
 所有值得注意的变更记录。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 
+## [v1.5] — 2026-06-05
+
+### 新增
+- **文章朗读工具 (`read_article`)**：搜索 + 抓取 + 清洗网页内容，TTS 直接朗读
+  - 支持 query（Bing 搜索 + 百度兜底）和 url 两种输入方式
+  - 智能文本清洗：去除导航/广告/脚本残留，提取正文段落
+  - 长文截断（1500字），自动提示「说继续听下一段」
+  - 系统提示词优化：古诗/名篇 LLM 直接背诵，不调工具
+- **自动测试扩展至 14 个**：
+  - `tool_read_article` — 新工具直接测试（URL 抓取验证）
+  - `tool_location`, `tool_news`, `tool_web_fetch` — 外部工具直接测试
+  - `tool_config`, `tool_memory`, `tool_barge_in`, `tool_clear_history` — 本地工具直接测试
+  - `llm_multi_tool` — 多 tool_call 回归测试（防 API 400）
+- **Test-First 开发规则**：新功能必须先设计自动测试再编写代码
+
+### 修复
+- **测试后卡死**：`runTest()` 完成后未恢复 `testMode=false` + `startListening()`，导致 app 无法继续监听
+- **read_article 超时**：搜索后端从 DuckDuckGo 改为 Bing（中国可访问），百度兜底
+
+### 文档
+- `docs/ROADMAP_zh.md` / `docs/ROADMAP_en.md` — 路线图
+- `docs/TESTING_zh.md` / `docs/TESTING_en.md` — 完整测试文档（14 个测试）
+- 技能 `auto-test-framework.md` — 测试架构 + Test-First 工作流
+
 ## [v1.4] — 2026-06-04
 
 ### 新增

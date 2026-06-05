@@ -124,6 +124,33 @@ class ConfigManager(context: Context) {
      * Check if Picovoice is configured.
      */
     fun isPicovoiceConfigured(): Boolean = picovoiceAccessKey.isNotBlank()
+
+    // ── L2: Generic user preferences (key-value, LLM-writable) ──────
+
+    /**
+     * Store an arbitrary user preference that the LLM can set via update_config tool.
+     * Keys known to affect behavior: response_style, default_news_category, user_city, user_name.
+     */
+    fun setUserPreference(key: String, value: String) {
+        prefs.edit().putString("user_pref_$key", value).apply()
+    }
+
+    /** Read a user preference. Returns null if not set. */
+    fun getUserPreference(key: String): String? {
+        return prefs.getString("user_pref_$key", null)
+    }
+
+    /** All user preferences (keys without "user_pref_" prefix). */
+    fun getAllUserPreferences(): Map<String, String> {
+        val all = prefs.all
+        val result = mutableMapOf<String, String>()
+        for ((k, v) in all) {
+            if (k.startsWith("user_pref_") && v is String) {
+                result[k.removePrefix("user_pref_")] = v
+            }
+        }
+        return result
+    }
 }
 
 /** Configuration for a single MCP server. */

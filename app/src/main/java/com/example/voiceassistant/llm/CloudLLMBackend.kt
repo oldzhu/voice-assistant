@@ -97,8 +97,9 @@ class CloudLLMBackend(
      */
     data class ToolChatResult(
         val textResponse: String?,
-        val functionCall: Pair<String, Map<String, Any?>>?, // (function_name, args)
-        val rawAssistantMessage: Map<String, Any?>? = null  // full message from LLM (includes reasoning_content, etc.)
+        val functionCall: Pair<String, Map<String, Any?>>?, // (function_name, args) — first call only (legacy)
+        val functionCalls: List<Pair<String, Map<String, Any?>>>?, // all function calls (when LLM emits multiple)
+        val rawAssistantMessage: Map<String, Any?>? = null
     )
 
     /**
@@ -149,7 +150,7 @@ class CloudLLMBackend(
             val choice = choices.firstOrNull()
 
             if (choice == null) {
-                return@withContext Result.success(ToolChatResult("", null))
+                return@withContext Result.success(ToolChatResult("", null, null))
             }
 
             @Suppress("UNCHECKED_CAST")
@@ -158,34 +159,44 @@ class CloudLLMBackend(
 
             if (finishReason == "tool_calls") {
                 @Suppress("UNCHECKED_CAST")
-                val toolCalls = message?.get("tool_calls") as? List<Map<String, Any?>>
-                val tc = toolCalls?.firstOrNull()
-                @Suppress("UNCHECKED_CAST")
-                val func = tc?.get("function") as? Map<String, Any?>
-                if (func != null) {
-                    val funcName = func["name"] as? String ?: ""
-                    val argsJson = func["arguments"] as? String ?: "{}"
-                    val args: Map<String, Any?> = try {
-                        @Suppress("UNCHECKED_CAST")
-                        (gson.fromJson(argsJson, Map::class.java) as? Map<String, Any?>)
-                            ?: emptyMap()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to parse tool args: $argsJson", e)
-                        emptyMap()
+                val toolCalls = message?.get("tool_calls") as? List<Map<String, Any?>> ?: emptyList()
+
+                // Extract ALL function calls (LLM may emit multiple)
+                val allCalls = mutableListOf<Pair<String, Map<String, Any?>>>()
+                for (tc in toolCalls) {
+                    @Suppress("UNCHECKED_CAST")
+                    val func = tc?.get("function") as? Map<String, Any?>
+                    if (func != null) {
+                        val funcName = func["name"] as? String ?: ""
+                        val argsJson = func["arguments"] as? String ?: "{}"
+                        val args: Map<String, Any?> = try {
+                            @Suppress("UNCHECKED_CAST")
+                            (gson.fromJson(argsJson, Map::class.java) as? Map<String, Any?>)
+                                ?: emptyMap()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to parse tool args: $argsJson", e)
+                            emptyMap()
+                        }
+                        allCalls.add(Pair(funcName, args))
                     }
-                    Log.i(TAG, "ToolChat: function_call → $funcName($args)")
+                }
+
+                val firstCall = allCalls.firstOrNull()
+                if (firstCall != null) {
+                    Log.i(TAG, "ToolChat: ${allCalls.size} function_call(s) → ${allCalls.map { it.first }.joinToString()}")
                     Result.success(ToolChatResult(
                         textResponse = null,
-                        functionCall = Pair(funcName, args),
+                        functionCall = firstCall,
+                        functionCalls = allCalls,
                         rawAssistantMessage = message
                     ))
                 } else {
-                    Result.success(ToolChatResult(null, null))
+                    Result.success(ToolChatResult(null, null, null))
                 }
             } else {
                 val content = message?.get("content") as? String ?: ""
                 Log.d(TAG, "ToolChat: text response (${content.length} chars)")
-                Result.success(ToolChatResult(content.trim(), null))
+                Result.success(ToolChatResult(content.trim(), null, null))
             }
         } catch (e: Exception) {
             Log.e(TAG, "ToolChat failed", e)

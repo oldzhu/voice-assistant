@@ -164,6 +164,41 @@ class SystemTtsEngine(private val context: Context) {
         }
     }
 
+    /**
+     * Speak WITHOUT triggering callbacks. For automated testing —
+     * ASR stays active during playback to capture the TTS output.
+     */
+    suspend fun speakForTest(text: String) {
+        if (text.isBlank()) return
+        val engine = tts ?: return
+
+        debugLog("TEST speak: '$text'")
+        val utteranceId = UUID.randomUUID().toString()
+
+        var done = false
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(uttId: String?) {}
+            override fun onDone(uttId: String?) {
+                debugLog("TEST speak done")
+                done = true
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onError(uttId: String?) {
+                debugLog("TEST speak error")
+                done = true
+            }
+        })
+
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+
+        withContext(Dispatchers.IO) {
+            val start = System.currentTimeMillis()
+            while (!done && System.currentTimeMillis() - start < 30000) {
+                delay(200)
+            }
+        }
+    }
+
     fun stop() {
         tts?.stop()
     }

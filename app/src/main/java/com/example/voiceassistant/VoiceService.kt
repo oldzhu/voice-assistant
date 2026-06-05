@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.media.AudioManager
+import android.media.MediaRecorder
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -31,6 +32,12 @@ import com.example.voiceassistant.tools.ClearHistoryTool
 import com.example.voiceassistant.tools.WebSearchTool
 import com.example.voiceassistant.tools.WebFetchTool
 import com.example.voiceassistant.tools.WeatherTool
+import com.example.voiceassistant.tools.LocationTool
+import com.example.voiceassistant.tools.NewsHeadlineTool
+import com.example.voiceassistant.tools.ReadAloudTool
+import com.example.voiceassistant.tools.UpdateConfigTool
+import com.example.voiceassistant.tools.RememberTool
+import com.example.voiceassistant.tools.RecallTool
 import com.example.voiceassistant.llm.transport.StdioMcpTransport
 import com.example.voiceassistant.llm.transport.HttpMcpTransport
 import com.example.voiceassistant.llm.McpClient
@@ -39,6 +46,8 @@ import com.example.voiceassistant.config.McpServerConfig
 import com.example.voiceassistant.speech.SherpaAsrEngine
 import com.example.voiceassistant.speech.SherpaTtsEngine
 import com.example.voiceassistant.speech.SystemTtsEngine
+import com.example.voiceassistant.test.TestEngine
+import com.example.voiceassistant.test.TestRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -60,6 +69,8 @@ class VoiceService : Service(), LifecycleOwner {
         private const val PAUSE_BEFORE_LISTEN_MS = 1500L
         private const val LISTEN_RESTART_DELAY_MS = 2000L
         const val ACTION_TEST_TTS = "com.example.voiceassistant.TEST_TTS"
+        /** New structured test action — supports test_type extra */
+        const val ACTION_RUN_TEST = "com.example.voiceassistant.RUN_TEST"
         const val TEST_TEXT = "我是猪头您的手机个人语音助手"
         private const val MAX_TEST_ATTEMPTS = 3
         // Wake phrases that resume from DORMANT state
@@ -110,7 +121,9 @@ class VoiceService : Service(), LifecycleOwner {
 
     // Auto-test fields
     private var testMode = false
+    private var testType = TestRunner.TEST_TTS_ROUNDTRIP  // default for backward compat
     private var testAttempt = 0
+    private var testRunner: TestRunner? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): VoiceService = this@VoiceService
@@ -119,6 +132,7 @@ class VoiceService : Service(), LifecycleOwner {
     override fun onCreate() {
         super.onCreate()
         debugLog("===== onCreate =====")
+        TestEngine.init(this)
         lifecycleRegistry = LifecycleRegistry(this)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
@@ -269,6 +283,13 @@ class VoiceService : Service(), LifecycleOwner {
                 register(WebSearchTool())
                 register(WebFetchTool())
                 register(WeatherTool())
+                register(LocationTool(this@VoiceService))
+                register(NewsHeadlineTool())
+                register(ReadAloudTool())
+                // L2+L4: Self-improvement
+                register(UpdateConfigTool { ConfigManager(this@VoiceService) })
+                register(RememberTool { File(filesDir, "assistant_memory.json") })
+                register(RecallTool { File(filesDir, "assistant_memory.json") })
             }
             toolCallEngine = ToolCallEngine(cloudBackend, toolRegistry)
             debugLog("Tools registered: ${toolRegistry.getAll().map { it.name }}")
@@ -282,11 +303,28 @@ class VoiceService : Service(), LifecycleOwner {
         initialized = true
         debugLog("Engines initialized, state=$state")
 
+        // Create test runner with engine references
+        testRunner = TestRunner(
+            scope = lifecycleScope,
+            asrEngine = { asrEngine },
+            sysTtsEngine = { sysTtsEngine },
+            sherpaTtsEngine = { ttsEngine },
+            useSystemTts = { useSystemTts },
+            llmBackend = { llmBackend },
+            toolCallEngine = { if (::toolCallEngine.isInitialized) toolCallEngine else null },
+            toolRegistry = { if (::toolRegistry.isInitialized) toolRegistry else null }
+        )
+
         if (testMode) {
             updateState(State.INITIALIZING)
             lifecycleScope.launch {
                 delay(500)
-                runTtsTest()
+                runTest()
+                // Tests complete — resume normal listening mode
+                testMode = false
+                debugLog("Test mode finished, resuming normal listening")
+                updateState(State.LISTENING)
+                startListening()
             }
         } else {
             updateState(State.LISTENING)
@@ -331,16 +369,6 @@ class VoiceService : Service(), LifecycleOwner {
         }
     }
 
-    private fun runTtsTest() {
-        if (!testMode) return
-        testAttempt++
-        debugLog("========== TTS TEST #$testAttempt ==========")
-        debugLog("TEST speaking test text...")
-        lifecycleScope.launch {
-            ttsEngine?.speakForTest(TEST_TEXT)
-        }
-    }
-
     private fun onSpeechRecognized(text: String) {
         if (text.isBlank()) return
         if (testMode) {
@@ -380,47 +408,76 @@ class VoiceService : Service(), LifecycleOwner {
         }
     }
 
+    private suspend fun runTest() {
+        if (!testMode) return
+        testAttempt++
+        debugLog("========== TEST START: $testType (#$testAttempt) ==========")
+
+        // Switch to permissive audio mode for acoustic tests
+        // VOICE_RECOGNITION: no AEC, allows speaker output into mic
+        val originalSource = asrEngine?.audioSource ?: MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        asrEngine?.audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION
+        audioManager.mode = AudioManager.MODE_NORMAL
+        debugLog("Test audio mode: VOICE_RECOGNITION + MODE_NORMAL (permissive)")
+
+        testRunner?.run(testType,
+            mapOf("text" to TEST_TEXT, "attempts" to MAX_TEST_ATTEMPTS.toString()))
+
+        // Restore user mode
+        asrEngine?.audioSource = originalSource
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        debugLog("Audio mode restored: VOICE_COMMUNICATION + MODE_IN_COMMUNICATION")
+        debugLog("========== TEST END: $testType ==========")
+    }
+
+    // ── Old test methods (kept for backward compat, delegate to TestEngine) ──
+
+    private fun runTtsTest() {
+        // Legacy path: used by internal retry loop
+        testType = TestRunner.TEST_TTS_ROUNDTRIP
+        lifecycleScope.launch { runTest() }
+    }
+
     private fun onTestAsrResult(recognized: String) {
-        debugLog("TEST recognized: '$recognized'")
-        val similarity = textSimilarity(TEST_TEXT, recognized)
-        debugLog("TEST similarity: $similarity%")
+        // Capture result for TestRunner
+        testRunner?.onAsrResult(recognized)
+        // Legacy: compute similarity
+        val similarity = TestEngine.textSimilarity(TEST_TEXT, recognized)
+        debugLog("TEST recognized: '$recognized' similarity=$similarity%")
+        TestEngine.result("similarity", similarity.toString())
+        TestEngine.result("recognized", recognized)
+
         if (similarity >= 60) {
-            debugLog("========== TEST PASSED ($similarity%) ==========")
+            TestEngine.pass()
             testMode = false
             lifecycleScope.launch { delay(1000); startListening() }
         } else if (testAttempt < MAX_TEST_ATTEMPTS) {
-            debugLog("========== TEST FAILED ($similarity%), retrying... ==========")
-            lifecycleScope.launch { delay(1500); runTtsTest() }
+            TestEngine.log("Test attempt $testAttempt failed ($similarity%), retrying...")
+            lifecycleScope.launch {
+                delay(1500)
+                // Only auto-retry for single tts_roundtrip — don't cascade "all" or e2e
+                if (testType == TestRunner.TEST_TTS_ROUNDTRIP) {
+                    runTest()
+                }
+            }
         } else {
-            debugLog("========== TEST FAILED after $MAX_TEST_ATTEMPTS attempts ==========")
+            TestEngine.fail("similarity=$similarity% < 60% after $MAX_TEST_ATTEMPTS attempts")
             testMode = false
             lifecycleScope.launch { delay(1000); startListening() }
         }
     }
 
-    private fun textSimilarity(a: String, b: String): Int {
-        val clean = { s: String -> s.replace(Regex("[^\\u4e00-\\u9fff]"), "") }
-        val ca = clean(a); val cb = clean(b)
-        if (ca.isEmpty() || cb.isEmpty()) return 0
-        val maxLen = maxOf(ca.length, cb.length)
-        val dist = levenshtein(ca, cb)
-        return ((maxLen - dist).toDouble() / maxLen * 100).toInt()
-    }
-
-    private fun levenshtein(a: String, b: String): Int {
-        val m = a.length; val n = b.length
-        val dp = Array(m + 1) { IntArray(n + 1) }
-        for (i in 0..m) dp[i][0] = i
-        for (j in 0..n) dp[0][j] = j
-        for (i in 1..m) for (j in 1..n)
-            dp[i][j] = minOf(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + if (a[i-1]==b[j-1]) 0 else 1)
-        return dp[m][n]
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         debugLog("===== onStartCommand ===== initialized=$initialized")
-        if (intent?.action == ACTION_TEST_TTS || intent?.getStringExtra("action") == "TEST_TTS") {
-            testMode = true; testAttempt = 0; debugLog("TEST MODE enabled")
+        // Test mode dispatch: check for test_type or legacy TEST_TTS
+        val testTypeExtra = intent?.getStringExtra("test_type")
+        if (testTypeExtra != null) {
+            testMode = true; testAttempt = 0
+            testType = testTypeExtra
+            debugLog("TEST MODE enabled: $testType")
+        } else if (intent?.action == ACTION_TEST_TTS || intent?.getStringExtra("action") == "TEST_TTS") {
+            testMode = true; testAttempt = 0; testType = TestRunner.TEST_TTS_ROUNDTRIP
+            debugLog("TEST MODE enabled (legacy)")
         }
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         createNotificationChannel()

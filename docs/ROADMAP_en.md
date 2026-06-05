@@ -1,123 +1,60 @@
-# Pig Head Assistant — Project Roadmap
+# Voice Assistant — Development Roadmap
 
-> Offline voice assistant agent for Android, targeting Hermes / OpenClaw capabilities
+## Completed ✅
 
-## ✅ Completed (v1.0)
+### v1 — Core Voice Pipeline
+- Sherpa-ONNX ASR (Paraformer bilingual CN/EN streaming)
+- System TTS (Yuemeng engine, 275 voices)
+- Foreground Service always-listening
+- DORMANT sleep/wake state machine
+- Barge-in modes (off/on/keyword) + AEC
 
-| Module | Description |
-|--------|-------------|
-| 🎤 ASR | Sherpa-ONNX Zipformer CTC, offline Chinese recognition |
-| 🧠 LLM | DeepSeek API, streaming conversation |
-| 🔊 TTS | System TTS (Yuemeng engine), 275 voices, clear Chinese |
-| 🔇 AEC | AudioRecord Acoustic Echo Cancellation, prevents self-loop |
-| ⚡ Speech Rate | 0.5x–2.5x adjustable via settings slider |
-| 📋 History | Backup / restore / delete conversation logs |
+### v2 — LLM Tool Calling
+- ToolCallEngine + 13 tools
+- Multi-tool-call fix (DeepSeek API 400)
+- Self-improvement L2 (update_config) + L4 (remember/what_do_you_know)
+- External tools (weather/news/location/web fetch)
+- Location awareness (GPS + reverse geocoding)
 
-## ✅ Completed (v1.1)
+### v3 — Auto-Test Framework
+- TestEngine marker system (Python runner parses)
+- 5 core + 7 direct tool + 1 LLM-mediated = 13 tests
+- Acoustic round-trip (TTS→mic→ASR→similarity)
+- Test-First development rule
 
-| Module | Description |
-|--------|-------------|
-| 🌐 Bilingual ASR | Upgraded to Paraformer bilingual (`sherpa-onnx-streaming-paraformer-bilingual-zh-en`), supports mixed CN/EN |
-| 📡 Streaming Recognition | OfflineRecognizer → OnlineRecognizer, real-time incremental results with built-in endpoint detection |
+---
 
-## ✅ Completed (v1.2)
+## For Discussion 📋
 
-| Module | Description |
-|--------|-------------|
-| 🗣 Barge-in Modes | Three switchable modes: A (off) / B (voice interrupt) / C (keyword interrupt, default "pig head") |
-| 📊 Status Display | Fixed bug where state stuck at "replying" after TTS finished; now correctly returns to "listening" |
-| 🔊 Full-duplex AEC | AudioSource → VOICE_COMMUNICATION + MODE_IN_COMMUNICATION, hardware AEC for barge-in modes |
+### Option A: L3 Self-Generated MCP Tools 🧠
+**Feature**: LLM writes its own tool scripts. User "I need currency conversion"→ LLM generates Python→stdio MCP launch→registered in ToolRegistry.
+**Auto-test**: `tool_mcp_create` — generate simple tool → verify registration → verify execution.
+**Difficulty**: Medium. Architecture ready (StdioMcpTransport + McpClient).
 
-## ✅ Completed (v1.3)
+### Option B: Session Persistence 💾
+**Feature**: Restore conversation after app restart. No context loss when phone kills process.
+**Auto-test**: `tool_persistence` — simulate conversation → serialize → deserialize → LLM references history.
+**Difficulty**: Low. SharedPreferences + JSON.
 
-| Module | Description |
-|--------|-------------|
-| 🔧 Tool Calling Framework | OpenAI function calling compatible. Tool interface → ToolRegistry → ToolCallEngine multi-turn execution loop |
-| 🎛 Voice Control Tools | `set_speech_rate` / `stop_listening` / `start_listening` / `set_barge_in_mode` / `clear_history` — control the assistant via natural language |
+### Option C: Timed Reminders / Alarms ⏰
+**Feature**: "Remind me to drink water in 15 minutes"→ AlarmManager schedule → TTS announcement.
+**Auto-test**: `tool_reminder` — register alarm → `dumpsys alarm` verify.
+**Difficulty**: Medium. Needs precise AlarmManager + foreground Service wakeup.
 
-## ✅ Completed (v1.3.1)
+### Option D: Cleanup + Hardening 🧹
+- Remove old `runTtsTest()` duplicate trigger
+- Add `tool_weather` direct test
+- Network-disconnect error boundary tests
+**Auto-test**: `tool_weather` + `tool_network_error`
+**Difficulty**: Low. Mostly cleanup and test coverage.
 
-| Module | Description |
-|--------|-------------|
-| 🌐 External Web Tools | `web_search` (DuckDuckGo) / `web_fetch` (page fetch) / `get_weather` — no API key required |
-| 💤 Dormant State | Say "stop listening" to sleep; ASR keeps running, only wake phrases ("start listening" / "come back") accepted |
-| 🐛 DeepSeek Thinking Fix | Preserve `reasoning_content` in multi-turn tool calls to avoid API 400 errors |
+### Option E: Media Search + Playback 🎵
+**Feature**: Search songs/videos/novels → play, not just return links.
+- **Novels**: web_fetch content → TTS read aloud ✅ existing capability
+- **Songs**: Search → open music app (Intent) or find free audio sources
+- **Videos**: Search → `Intent.ACTION_VIEW` open YouTube/Bilibili
+**Auto-test**: `tool_media_search` — search → verify playable content returned.
+**Difficulty**: Novels low, songs high, videos medium.
 
-## ✅ Completed (v1.4)
-
-| Module | Description |
-|--------|-------------|
-| 🔌 MCP Client | Connect to MCP servers, auto-discover tools. Supports stdio (ProcessBuilder) + HTTP (OkHttp). JSON-RPC 2.0 |
-
-## 🔜 Near-term (v1.5)
-
-### 1. Wake Word / Low-power Sleep
-- Hands-free "pig head pig head" always-on wake word
-- Sherpa-ONNX KeywordSpotter for low-power listening
-- Battery-efficient sleep strategy
-
-> Full blueprint: [docs/plans/2026-06-04-agent-20-blueprint.md](plans/2026-06-04-agent-20-blueprint.md)
-
-## 📅 Mid-term (v1.5–v2.0)
-
-| Module | Description |
-|--------|-------------|
-| 🧠 Context Memory | Remember user preferences, key conversation details |
-| 🗄 Local KB | RAG over personal notes / documents |
-| 🎵 Media | Music search / download / playback |
-| ⏰ System Tools | Alarm, reminders, calendar, WeChat messages |
-| 🔧 Plugins | Third-party tool registration |
-
-## 🚀 Long-term (v2.0+)
-
-| Module | Description |
-|--------|-------------|
-| 📈 Trading | Stock quotes, backtesting, order execution |
-| 📷 Multimodal | Camera recognition, screen understanding |
-| 🤖 Agent Orchestration | Multi-step autonomous task planning |
-| 🔗 Multi-device | Phone ↔ Desktop ↔ Server sync |
-| 🗣 Personality | Custom assistant character, persistent memory |
-
-## 📂 Project Structure
-
-```
-voice-assistant/
-├── app/
-│   ├── src/main/java/com/example/voiceassistant/
-│   │   ├── MainActivity.kt          # Main UI
-│   │   ├── VoiceService.kt          # Foreground service, state machine
-│   │   ├── config/ConfigManager.kt  # Persistent config
-│   │   ├── llm/                     # LLM backends + tool engine
-│   │   │   ├── LLMBackend.kt        # Common interface
-│   │   │   ├── CloudLLMBackend.kt   # DeepSeek API + function calling
-│   │   │   ├── LocalLLMBackend.kt   # Ollama local
-│   │   │   ├── Tool.kt              # Tool interface definition
-│   │   │   ├── ToolRegistry.kt      # Tool registration hub
-│   │   │   └── ToolCallEngine.kt    # LLM↔tool execution loop
-│   │   ├── tools/                   # Tool implementations
-│   │   │   ├── ControlTools.kt       # Voice control toolset (5 tools)
-│   │   │   └── ExternalTools.kt      # External tools (search/fetch/weather, 3 tools)
-│   │   └── speech/                  # Speech engines
-│   │       ├── SherpaAsrEngine.kt   # Offline ASR
-│   │       ├── SystemTtsEngine.kt   # System TTS
-│   │       └── SherpaTtsEngine.kt   # Offline TTS (deprecated)
-│   ├── src/main/assets/             # Models (download separately)
-│   └── build.gradle.kts
-├── docs/                            # Project documentation
-│   ├── ROADMAP_zh.md / _en.md
-│   ├── CHANGELOG_zh.md / _en.md
-│   └── plans/                       # Implementation plans
-└── CHANGELOG.md                     # (root, deprecated)
-```
-
-## 🔗 Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| ASR | Sherpa-ONNX OnlineRecognizer (Paraformer bilingual int8) |
-| TTS | Android TextToSpeech (Yuemeng) |
-| LLM | DeepSeek API (function calling) / Ollama |
-| Tool Framework | OpenAI function calling compatible |
-| UI | Jetpack Compose + Material 3 |
-| Audio | AudioRecord + AEC + MODE_IN_COMMUNICATION |
-| Build | Gradle 9.x + Kotlin 2.x |
+### Option F: User-Proposed Features
+(TBD — open for discussion)

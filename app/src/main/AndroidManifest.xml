@@ -25,6 +25,10 @@
     <!-- Notifications for foreground service (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Location for weather/geolocation features -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- Mark this as an accessibility/voice assistant app -->
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
 
