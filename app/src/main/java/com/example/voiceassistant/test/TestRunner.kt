@@ -23,7 +23,8 @@ class TestRunner(
     private val useSystemTts: () -> Boolean,
     private val llmBackend: () -> LLMBackend?,
     private val toolCallEngine: () -> ToolCallEngine?,
-    private val toolRegistry: () -> ToolRegistry?
+    private val toolRegistry: () -> ToolRegistry?,
+    private val filesDir: () -> java.io.File
 ) {
     companion object {
         const val DEFAULT_TEST_TEXT = "我是猪头您的手机个人语音助手"
@@ -45,6 +46,7 @@ class TestRunner(
         const val TEST_TOOL_BARGE_IN = "tool_barge_in"
         const val TEST_TOOL_CLEAR_HISTORY = "tool_clear_history"
         const val TEST_TOOL_READ_ARTICLE = "tool_read_article"
+        const val TEST_TOOL_PERSISTENCE = "tool_persistence"
 
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
@@ -76,6 +78,7 @@ class TestRunner(
             TEST_TOOL_BARGE_IN -> testToolBargeIn()
             TEST_TOOL_CLEAR_HISTORY -> testToolClearHistory()
             TEST_TOOL_READ_ARTICLE -> testToolReadArticle()
+            TEST_TOOL_PERSISTENCE -> testToolPersistence()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
             TEST_ALL -> runAll()
             else -> {
@@ -517,6 +520,41 @@ class TestRunner(
             }
         } catch (e: Exception) {
             TestEngine.fail("Read article exception: ${e.message}")
+            return false
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Persistence Test (two-phase: save now, verify after restart)
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Phase 1 of persistence test: write synthetic conversation to store.
+     *
+     * The Python runner then force-stops + restarts the app. Phase 2
+     * happens automatically — on restart, VoiceService logs
+     * "[PERSISTENCE:LOADED] count=N" which the runner parses to verify.
+     *
+     * This test isn't about LLM correctness — it validates the file I/O
+     * path: write JSON → process death → read JSON → restore in-memory list.
+     */
+    private suspend fun testToolPersistence(): Boolean {
+        TestEngine.start("tool", "persistence")
+
+        try {
+            val store = com.example.voiceassistant.config.ConversationStore(filesDir())
+            val messages = listOf(
+                LLMBackend.ChatMessage("user", "我叫小明"),
+                LLMBackend.ChatMessage("assistant", "你好小明！有什么可以帮你的？")
+            )
+            store.save(messages)
+            TestEngine.result("written_count", messages.size.toString())
+            TestEngine.log("[PERSISTENCE:WRITTEN] count=${messages.size}")
+            TestEngine.log("Phase 1 complete — runner should force-stop + restart now")
+            TestEngine.pass()
+            return true
+        } catch (e: Exception) {
+            TestEngine.fail("Persistence write failed: ${e.message}")
             return false
         }
     }

@@ -279,7 +279,7 @@ def wait_for_init(timeout: int = 20) -> bool:
     """Wait for app to finish initialization by polling debug.log for 'Engines initialized'."""
     start = time.time()
     while time.time() - start < timeout:
-        log = read_debug_log(tail=5)
+        log = read_debug_log(tail=20)
         if "Engines initialized" in log:
             return True
         time.sleep(1)

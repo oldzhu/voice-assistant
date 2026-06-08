@@ -24,9 +24,11 @@ Test types:
       tool_memory       — remember → what_do_you_know round-trip
       tool_barge_in     — set_barge_in_mode all modes
       tool_clear_history — clear_history
+      tool_read_article  — Read article tool
+      tool_persistence   — Conversation persistence across restarts (two-phase)
     LLM-mediated (v2.0):
       llm_multi_tool    — ≥2 tool calls in one response
-    all            — Run all 13 tests
+    all            — Run all 14 tests
 """
 import argparse
 import json
@@ -57,6 +59,66 @@ def print_result(passed: bool, test_name: str, details=""):
     """Print a test result line."""
     icon = "✅" if passed else "❌"
     print(f"  {icon} {test_name}  {details}")
+
+
+def run_persistence_test(report: dict) -> dict:
+    """
+    Two-phase persistence test:
+      Phase 1: Start app in test mode → write synthetic conversation → stop
+      Phase 2: Restart app (no test mode) → verify history loaded from disk
+    """
+    print_header("PERSISTENCE: Phase 1 (write)")
+
+    # Phase 1: Write
+    clear_log()
+    stop_app()
+    time.sleep(1)
+    start_app({"test_type": "tool_persistence"})
+    if not wait_for_init(timeout=25):
+        print("  ❌ Phase 1: Init timeout")
+        return {"passed": False, "reason": "Phase 1 init timeout"}
+
+    # Wait for Phase 1 test markers
+    results = wait_for_test_complete(timeout=30)
+    test_data = results["tests"].get("tool/persistence", {})
+    if test_data.get("passed") is not True:
+        print("  ❌ Phase 1: Write test failed")
+        return {"passed": False, "reason": f"Phase 1 write failed: {test_data.get('reason', 'unknown')}"}
+    written = int(test_data.get("results", {}).get("written_count", 0))
+    print(f"  ✅ Phase 1: Wrote {written} messages")
+
+    # Phase 2: Restart and verify
+    print_header("PERSISTENCE: Phase 2 (restore)")
+    stop_app()
+    time.sleep(2)
+    clear_log()
+    start_app()  # No test mode — normal start
+
+    # Wait for init and check for loader marker
+    start_time = time.time()
+    loaded_count = 0
+    while time.time() - start_time < 20:
+        log = read_debug_log(tail=50)
+        if "Engines initialized" in log or "PERSISTENCE:LOADED" in log:
+            time.sleep(1)
+            log = read_debug_log(tail=100)
+            # Parse [PERSISTENCE:LOADED] count=N
+            import re
+            m = re.search(r"\[PERSISTENCE:LOADED\]\s+count=(\d+)", log)
+            if m:
+                loaded_count = int(m.group(1))
+                break
+        time.sleep(1)
+
+    if loaded_count > 0:
+        print(f"  ✅ Phase 2: Restored {loaded_count} messages from disk")
+        return {"passed": True, "written": written, "loaded": loaded_count}
+    elif "Engines initialized" in read_debug_log(tail=50):
+        print(f"  ❌ Phase 2: App initialized but no history loaded")
+        return {"passed": False, "reason": "No history loaded on restart"}
+    else:
+        print(f"  ❌ Phase 2: App init timeout")
+        return {"passed": False, "reason": "Phase 2 init timeout"}
 
 
 def run_tests(
@@ -115,6 +177,20 @@ def run_tests(
 
     if install_only:
         print(f"  Install-only mode — done.")
+        return report
+
+    # ── Persistence test: special two-phase flow ─────────
+    if test_type == "tool_persistence":
+        result = run_persistence_test(report)
+        report["tests"]["tool/persistence"] = result
+        if result.get("passed"):
+            report["overall"] = {"passed": 1, "failed": 0, "total": 1}
+        else:
+            report["overall"] = {"passed": 0, "failed": 1, "total": 1}
+        print(f"\n  📊 Persistence: {'✅ PASS' if result.get('passed') else '❌ FAIL'}")
+        if report_path:
+            with open(report_path, "w") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False, default=str)
         return report
 
     # ── Step 4: Start + Init Check ──────────────────────
@@ -188,7 +264,7 @@ def main():
         default="all",
         choices=["all", "init", "tts_roundtrip", "llm_connectivity", "llm_tools", "e2e_full_pipeline",
                  "tool_location", "tool_news", "tool_web_fetch", "tool_config", "tool_memory",
-                 "tool_barge_in", "tool_clear_history", "tool_read_article", "llm_multi_tool"],
+                 "tool_barge_in", "tool_clear_history", "tool_read_article", "tool_persistence", "llm_multi_tool"],
         help="Test type to run (default: all)"
     )
     parser.add_argument("--no-build", action="store_true", help="Skip build step")

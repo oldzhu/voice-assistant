@@ -182,6 +182,7 @@ Requires ADB connected. Tests cover ASR, TTS, tools, LLM roundtrip, and acoustic
 | Testing Guide / 测试指南 | [TESTING_zh.md](docs/TESTING_zh.md) | [TESTING_en.md](docs/TESTING_en.md) |
 | Changelog / 变更记录 | [CHANGELOG_zh.md](docs/CHANGELOG_zh.md) | [CHANGELOG_en.md](docs/CHANGELOG_en.md) |
 | TTS Sanitizer Design / TTS 清洗设计 | [TTS_SANITIZER_DESIGN_zh.md](docs/TTS_SANITIZER_DESIGN_zh.md) | [TTS_SANITIZER_DESIGN_en.md](docs/TTS_SANITIZER_DESIGN_en.md) |
+| Persistence Design / 持久化设计 | [PERSISTENCE_DESIGN_zh.md](docs/PERSISTENCE_DESIGN_zh.md) | [PERSISTENCE_DESIGN_en.md](docs/PERSISTENCE_DESIGN_en.md) |
 | Self-Improvement / 自我优化 | [SELF_IMPROVEMENT.md](docs/SELF_IMPROVEMENT.md) | — |
 | Design Proposals / 设计方案 | [plans/](docs/plans/) | — |
 
@@ -192,6 +193,7 @@ Requires ADB connected. Tests cover ASR, TTS, tools, LLM roundtrip, and acoustic
 - **Local ASR + TTS, cloud LLM** — speech I/O stays on-device for low latency; LLM is cloud for quality
 - **System TTS over Sherpa-ONNX TTS** — 275 natural Chinese voices vs. robotic VITS
 - **TTS text sanitizer** — two-layer defense (prompt + regex) strips Markdown before speech
+- **Session persistence** — conversation history survives app restart/process death
 - **DORMANT state** — keyword-triggered sleep conserves battery during runs
 - **Barge-in modes** — off (stop ASR during TTS), on (continuous listening), keyword (interrupt on wake word)
 - **Test-First** — new features require automated tests before implementation

@@ -19,6 +19,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.lifecycleScope
 import com.example.voiceassistant.config.ConfigManager
+import com.example.voiceassistant.config.ConversationStore
 import com.example.voiceassistant.llm.CloudLLMBackend
 import com.example.voiceassistant.llm.LLMBackend
 import com.example.voiceassistant.llm.LocalLLMBackend
@@ -106,6 +107,7 @@ class VoiceService : Service(), LifecycleOwner {
     @Volatile private var state: State = State.STOPPED
     @Volatile private var initialized = false
     private val conversationHistory = mutableListOf<LLMBackend.ChatMessage>()
+    private lateinit var conversationStore: ConversationStore
     private var stateChangeListener: ((State, String?) -> Unit)? = null
 
     // Barge-in config
@@ -279,6 +281,7 @@ class VoiceService : Service(), LifecycleOwner {
                 })
                 register(ClearHistoryTool {
                     conversationHistory.clear()
+                    if (::conversationStore.isInitialized) conversationStore.clear()
                 })
                 // External tools
                 register(WebSearchTool())
@@ -305,6 +308,15 @@ class VoiceService : Service(), LifecycleOwner {
         debugLog("Engines initialized, state=$state")
 
         // Create test runner with engine references
+        // Initialize session persistence
+        conversationStore = ConversationStore(filesDir)
+        val savedHistory = conversationStore.load()
+        if (savedHistory.isNotEmpty()) {
+            conversationHistory.addAll(savedHistory)
+            debugLog("[PERSISTENCE:LOADED] count=${savedHistory.size}")
+            debugLog("Restored ${savedHistory.size} messages from previous session")
+        }
+
         testRunner = TestRunner(
             scope = lifecycleScope,
             asrEngine = { asrEngine },
@@ -313,7 +325,8 @@ class VoiceService : Service(), LifecycleOwner {
             useSystemTts = { useSystemTts },
             llmBackend = { llmBackend },
             toolCallEngine = { if (::toolCallEngine.isInitialized) toolCallEngine else null },
-            toolRegistry = { if (::toolRegistry.isInitialized) toolRegistry else null }
+            toolRegistry = { if (::toolRegistry.isInitialized) toolRegistry else null },
+            filesDir = { filesDir }
         )
 
         if (testMode) {
@@ -515,6 +528,8 @@ class VoiceService : Service(), LifecycleOwner {
     }
 
     override fun onDestroy() {
+        // Last-resort save — normal path saves after each LLM response
+        if (::conversationStore.isInitialized) conversationStore.save(conversationHistory)
         updateState(State.STOPPED)
         asrEngine?.stop(); asrEngine?.release()
         stopTts(); releaseTts()
@@ -572,6 +587,8 @@ class VoiceService : Service(), LifecycleOwner {
             conversationHistory.add(LLMBackend.ChatMessage("assistant", response))
             if (conversationHistory.size > HISTORY_MAX_SIZE) conversationHistory.removeAt(0)
             saveConversationLine("🐷 猪头", response)
+            // Persist to survive process death
+            if (::conversationStore.isInitialized) conversationStore.save(conversationHistory)
             // If tool execution put us in DORMANT (stop_listening), still speak the farewell
             // Keep DORMANT state so TTS onDone stays dormant after farewell
             if (state != State.DORMANT) {
@@ -662,6 +679,7 @@ class VoiceService : Service(), LifecycleOwner {
 
     fun clearConversation() {
         conversationHistory.clear()
+        if (::conversationStore.isInitialized) conversationStore.clear()
         try { conversationLogFile.writeText("") } catch (_: Exception) {}
         debugLog("Conversation cleared")
     }
