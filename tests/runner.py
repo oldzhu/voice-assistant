@@ -33,6 +33,7 @@ Test types:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -74,7 +75,15 @@ def run_persistence_test(report: dict) -> dict:
     stop_app()
     time.sleep(1)
     start_app({"test_type": "tool_persistence"})
-    if not wait_for_init(timeout=25):
+
+    # Wait for init (retry loop, WSL ADB can be slow to respond)
+    for _ in range(20):
+        time.sleep(1)
+        log = read_debug_log(tail=30)
+        if "Engines initialized" in log:
+            print("  ✅ App initialized")
+            break
+    else:
         print("  ❌ Phase 1: Init timeout")
         return {"passed": False, "reason": "Phase 1 init timeout"}
 
@@ -97,18 +106,18 @@ def run_persistence_test(report: dict) -> dict:
     # Wait for init and check for loader marker
     start_time = time.time()
     loaded_count = 0
-    while time.time() - start_time < 20:
-        log = read_debug_log(tail=50)
-        if "Engines initialized" in log or "PERSISTENCE:LOADED" in log:
-            time.sleep(1)
-            log = read_debug_log(tail=100)
-            # Parse [PERSISTENCE:LOADED] count=N
-            import re
-            m = re.search(r"\[PERSISTENCE:LOADED\]\s+count=(\d+)", log)
-            if m:
-                loaded_count = int(m.group(1))
-                break
+    while time.time() - start_time < 25:
         time.sleep(1)
+        log = read_debug_log(tail=50)
+        # Parse [PERSISTENCE:LOADED] count=N
+        m = re.search(r"\[PERSISTENCE:LOADED\]\s+count=(\d+)", log)
+        if m:
+            loaded_count = int(m.group(1))
+            break
+        if "Engines initialized" in log and "PERSISTENCE:LOADED" not in log:
+            # App started but no history restored — maybe first run
+            print("  ⚠️ App started but no PERSISTENCE:LOADED marker found")
+            break
 
     if loaded_count > 0:
         print(f"  ✅ Phase 2: Restored {loaded_count} messages from disk")
