@@ -91,6 +91,7 @@ voice-assistant/
 │       ├── MainActivity.kt          # Minimal UI launcher
 │       ├── config/
 │       │   └── ConfigManager.kt     # Runtime config persistence
+│       │   ├── ConversationStore.kt  # Session persistence (atomic writes)
 │       ├── llm/
 │       │   ├── CloudLLMBackend.kt   # DeepSeek API client
 │       │   ├── LocalLLMBackend.kt   # Ollama local LLM client

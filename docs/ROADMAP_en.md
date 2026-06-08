@@ -22,33 +22,33 @@
 - Acoustic round-trip (TTS→mic→ASR→similarity)
 - Test-First development rule
 
+### v4 — Session Persistence + TTS Sanitizer
+- **TTS text sanitizer**: two-layer defense (LLM system prompt + Kotlin regex) strips Markdown for natural TTS speech
+- **Session persistence**: ConversationStore — atomic writes (temp→rename), conversation survives app restart/kill
+- **README.md**: comprehensive project docs (architecture diagram, tool matrix, bilingual doc index)
+
 ---
 
 ## For Discussion 📋
 
-### Option A: L3 Self-Generated MCP Tools 🧠
-**Feature**: LLM writes its own tool scripts. User "I need currency conversion"→ LLM generates Python→stdio MCP launch→registered in ToolRegistry.
-**Auto-test**: `tool_mcp_create` — generate simple tool → verify registration → verify execution.
-**Difficulty**: Medium. Architecture ready (StdioMcpTransport + McpClient).
-
-### Option B: Session Persistence 💾
-**Feature**: Restore conversation after app restart. No context loss when phone kills process.
-**Auto-test**: `tool_persistence` — simulate conversation → serialize → deserialize → LLM references history.
-**Difficulty**: Low. SharedPreferences + JSON.
-
-### Option C: Timed Reminders / Alarms ⏰
-**Feature**: "Remind me to drink water in 15 minutes"→ AlarmManager schedule → TTS announcement.
-**Auto-test**: `tool_reminder` — register alarm → `dumpsys alarm` verify.
-**Difficulty**: Medium. Needs precise AlarmManager + foreground Service wakeup.
-
-### Option D: Cleanup + Hardening 🧹
+### Option A: Cleanup + Hardening 🧹
 - Remove old `runTtsTest()` duplicate trigger
 - Add `tool_weather` direct test
 - Network-disconnect error boundary tests
 **Auto-test**: `tool_weather` + `tool_network_error`
 **Difficulty**: Low. Mostly cleanup and test coverage.
 
-### Option E: Media Search + Playback 🎵
+### Option B: L3 Self-Generated MCP Tools 🧠
+**Feature**: LLM writes its own tool scripts. User "I need currency conversion"→ LLM generates Python→stdio MCP launch→registered in ToolRegistry.
+**Auto-test**: `tool_mcp_create` — generate simple tool → verify registration → verify execution.
+**Difficulty**: Medium. Architecture ready (StdioMcpTransport + McpClient).
+
+### Option C: Timed Reminders / Alarms ⏰
+**Feature**: "Remind me to drink water in 15 minutes"→ AlarmManager schedule → TTS announcement.
+**Auto-test**: `tool_reminder` — register alarm → `dumpsys alarm` verify.
+**Difficulty**: Medium. Needs precise AlarmManager + foreground Service wakeup.
+
+### Option D: Media Search + Playback 🎵
 **Feature**: Search songs/videos/novels → play, not just return links.
 - **Novels**: web_fetch content → TTS read aloud ✅ existing capability
 - **Songs**: Search → open music app (Intent) or find free audio sources
@@ -56,5 +56,5 @@
 **Auto-test**: `tool_media_search` — search → verify playable content returned.
 **Difficulty**: Novels low, songs high, videos medium.
 
-### Option F: User-Proposed Features
+### Option E: User-Proposed Features
 (TBD — open for discussion)

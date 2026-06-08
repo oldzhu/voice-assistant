@@ -2,6 +2,25 @@
 
 All notable changes are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [v1.6] — 2026-06-09
+
+### Added
+- **TTS text sanitizer (`TtsTextSanitizer`)**: two-layer defense strips Markdown for natural TTS speech
+  - Layer 1: system prompt instructs LLM to avoid Markdown ("Your reply will be read aloud via TTS, do not use Markdown formatting")
+  - Layer 2: Kotlin regex post-processing strips **bold**, *italic*, `code`, [links], #headings, list bullets, underscores, strikethrough
+  - `VoiceService.processQuery()` uses `speakTts(sanitizeForTts(response))` for clean speech
+- **Session persistence (`ConversationStore`)**: conversation survives app restart/kill
+  - Atomic writes (temp file → rename) to prevent corruption
+  - `save()` auto-invoked after each LLM response
+  - `load()` restores history after `initEngines()`
+  - `clear()` triggered by `clear_history` tool
+  - `onDestroy()` last-resort save
+  - Auto-test `tool_persistence`: write → kill → restart → verify recovery
+- **README.md**: comprehensive project docs with architecture diagram, tool matrix (14 tools), bilingual doc index, quick start guide
+
+### Fixed
+- Python test runner `tool_persistence` reliability improved for WSL `subprocess.run` + Windows ADB
+
 ## [v1.5] — 2026-06-05
 
 ### Added

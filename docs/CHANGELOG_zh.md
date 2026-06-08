@@ -2,6 +2,25 @@
 
 所有值得注意的变更记录。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 
+## [v1.6] — 2026-06-09
+
+### 新增
+- **TTS 文本清洗器 (`TtsTextSanitizer`)**：双层防御剥离 Markdown，确保 TTS 朗读自然
+  - Layer 1: 系统提示词明确要求 LLM 不输出 Markdown（"你的回复会被语音朗读，禁止使用Markdown格式"）
+  - Layer 2: Kotlin regex 后处理，剥离 **加粗**、*斜体*、`代码`、[链接]、#标题、列表符号、下划线、删除线
+  - `VoiceService.processQuery()` 中 `speakTts(sanitizeForTts(response))` 确保干净语音
+- **会话持久化 (`ConversationStore`)**：app 重启/被杀后恢复对话上下文
+  - 原子写入（temp file → rename）防 corruption
+  - `save()` 每次 LLM 回复后自动保存
+  - `load()` 在 `initEngines()` 后恢复历史
+  - `clear()` 通过 `clear_history` 工具触发
+  - `onDestroy()` 兜底保存
+  - 自动测试 `tool_persistence`：写→杀→重启→验证恢复
+- **项目 README**：完整文档，含架构图、工具矩阵（14 tools）、中英双语文档索引、快速开始指南
+
+### 修复
+- Python test runner `tool_persistence` 在 WSL 下 `subprocess.run` + Windows ADB 的可靠性改进
+
 ## [v1.5] — 2026-06-05
 
 ### 新增
