@@ -46,6 +46,7 @@ import com.example.voiceassistant.config.McpServerConfig
 import com.example.voiceassistant.speech.SherpaAsrEngine
 import com.example.voiceassistant.speech.SherpaTtsEngine
 import com.example.voiceassistant.speech.SystemTtsEngine
+import com.example.voiceassistant.speech.TtsTextSanitizer
 import com.example.voiceassistant.test.TestEngine
 import com.example.voiceassistant.test.TestRunner
 import kotlinx.coroutines.Dispatchers
@@ -576,7 +577,7 @@ class VoiceService : Service(), LifecycleOwner {
             if (state != State.DORMANT) {
                 updateState(State.SPEAKING, response)
             }
-            speakTts(response)
+            speakTts(TtsTextSanitizer.sanitize(response))
         } catch (e: Exception) {
             debugLog("LLM error: ${e.message}")
             val msg = when {
