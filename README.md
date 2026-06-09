@@ -23,7 +23,7 @@
                │        │        │
           ┌────▼──┐ ┌──▼────────▼──┐
           │ Tools  │ │   State      │
-          │  14    │ │   Machine    │
+          │  20    │ │   Machine    │
           │ tools  │ │  LISTENING   │
           │        │ │  THINKING    │
           │ weather│ │  SPEAKING    │
@@ -38,7 +38,7 @@
 | Stage | Tech | Notes |
 |-------|------|-------|
 | **ASR** (Speech → Text) | Sherpa-ONNX Paraformer bilingual zh-en | Streaming, int8 quantized, 227MB |
-| **LLM** (Text → Reply) | DeepSeek v4-flash via API | Tool-calling with 14 tools |
+| **LLM** (Text → Reply) | DeepSeek v4-flash via API | Tool-calling with 20 tools |
 | **TTS** (Reply → Speech) | System TTS (com.yuemeng.speechsuite) | 275 voices, local, ~1s init |
 | **VAD** | Silero VAD ONNX | Prevents silent mic noise from triggering ASR |
 
@@ -60,7 +60,7 @@
 
 ---
 
-## 🧰 Tools / 工具 (14 total)
+## 🧰 Tools / 工具 (20 total)
 
 | Tool | Description |
 |------|-------------|
@@ -69,7 +69,13 @@
 | `get_location` | GPS + reverse geocoding |
 | `web_search` | Bing web search |
 | `web_fetch` | Fetch & clean webpage content |
-| `read_article` | Search + fetch + read aloud (TTS) |
+| `read_article` | Search + fetch + TTS read aloud |
+| `search_media` | Media search — songs, videos, novels (cn.bing.com) |
+| `play_media` | Open media URL in system app (ACTION_VIEW) |
+| `set_reminder` | Schedule timed reminder → AlarmManager + TTS |
+| `cancel_reminder` | Cancel a pending reminder |
+| `list_reminders` | List all active reminders |
+| `create_tool` | L3 self-generating tools (LLM prompt-as-tool) |
 | `remember` | Save user facts to persistent memory |
 | `what_do_you_know` | Recall saved memories |
 | `update_config` | Change settings at runtime |
@@ -112,6 +118,10 @@ voice-assistant/
 │       │   ├── LocationTool.kt      # GPS location
 │       │   ├── NewsHeadlineTool.kt  # News headlines
 │       │   ├── ReadAloudTool.kt     # Article search + TTS read-aloud
+│       │   ├── MediaTools.kt        # Media search & playback
+│       │   ├── ReminderTool.kt      # Timed reminders + AlarmReceiver
+│       │   ├── DynamicTool.kt       # L3 prompt-as-tool runtime
+│       │   ├── CreateToolTool.kt    # L3 tool factory (tool_mcp_create)
 │       │   └── SelfImprovementTools.kt  # Memory & config tools
 │       └── test/
 │           ├── TestEngine.kt        # ADB-driven test harness
