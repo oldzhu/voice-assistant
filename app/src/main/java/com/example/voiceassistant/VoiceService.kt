@@ -592,12 +592,18 @@ class VoiceService : Service(), LifecycleOwner {
             saveConversationLine("🐷 猪头", response)
             // Persist to survive process death
             if (::conversationStore.isInitialized) conversationStore.save(conversationHistory)
+
+            // Sanitize for display & TTS — strip Markdown so what you see = what you hear
+            val spokenText = TtsTextSanitizer.sanitize(response)
+            // Cap long responses (articles can be thousands of chars)
+            val displayText = if (spokenText.length > 2000) spokenText.take(2000) + "…" else spokenText
+
             // If tool execution put us in DORMANT (stop_listening), still speak the farewell
             // Keep DORMANT state so TTS onDone stays dormant after farewell
             if (state != State.DORMANT) {
-                updateState(State.SPEAKING, response)
+                updateState(State.SPEAKING, displayText)
             }
-            speakTts(TtsTextSanitizer.sanitize(response))
+            speakTts(spokenText.take(3000))
         } catch (e: Exception) {
             debugLog("LLM error: ${e.message}")
             val msg = when {
