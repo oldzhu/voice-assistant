@@ -51,6 +51,8 @@ class TestRunner(
         const val TEST_TOOL_NETWORK_ERROR = "tool_network_error"
         const val TEST_TOOL_MCP_CREATE = "tool_mcp_create"
         const val TEST_TOOL_REMINDER = "tool_reminder"
+        const val TEST_TOOL_SEARCH_MEDIA = "tool_search_media"
+        const val TEST_TOOL_PLAY_MEDIA = "tool_play_media"
 
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
@@ -87,6 +89,8 @@ class TestRunner(
             TEST_TOOL_NETWORK_ERROR -> testToolNetworkError()
             TEST_TOOL_MCP_CREATE -> testToolMcpCreate()
             TEST_TOOL_REMINDER -> testToolReminder()
+            TEST_TOOL_SEARCH_MEDIA -> testToolSearchMedia()
+            TEST_TOOL_PLAY_MEDIA -> testToolPlayMedia()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
             TEST_ALL -> runAll()
             else -> {
@@ -117,6 +121,8 @@ class TestRunner(
         results.add(testToolNetworkError()); delay(500)
         results.add(testToolMcpCreate()); delay(1000)
         results.add(testToolReminder()); delay(500)
+        results.add(testToolSearchMedia()); delay(1000)
+        results.add(testToolPlayMedia()); delay(500)
         results.add(testToolLocation()); delay(1000)
 
         // Phase 4: LLM tests
@@ -871,6 +877,97 @@ class TestRunner(
             return true
         } catch (e: Exception) {
             TestEngine.fail("Reminder test exception: ${e.message}")
+            return false
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Media Search & Play Tests
+    // ═══════════════════════════════════════════════════════════
+
+    /** Invoke search_media and verify it returns results with links. */
+    private suspend fun testToolSearchMedia(): Boolean {
+        TestEngine.start("tool", "search_media")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        try {
+            val result = withTimeoutOrNull(12000L) {
+                registry.execute("search_media", mapOf(
+                    "query" to "周杰伦 晴天",
+                    "type" to "song"
+                ))
+            }
+
+            TestEngine.result("output", (result ?: "TIMEOUT").take(500))
+
+            when {
+                result == null -> {
+                    TestEngine.fail("search_media timed out")
+                    return false
+                }
+                result.contains("错误") || result.contains("搜索失败") -> {
+                    TestEngine.fail("search_media returned error: $result")
+                    return false
+                }
+                !result.contains("http") -> {
+                    TestEngine.fail("search_media returned no links: ${result.take(200)}")
+                    return false
+                }
+                else -> {
+                    TestEngine.pass()
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            TestEngine.fail("search_media exception: ${e.message}")
+            return false
+        }
+    }
+
+    /** Invoke play_media and verify it handles invalid/valid URLs gracefully. */
+    private suspend fun testToolPlayMedia(): Boolean {
+        TestEngine.start("tool", "play_media")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        try {
+            // Test 1: Invalid URL — should return error, not crash
+            val badResult = withTimeoutOrNull(5000L) {
+                registry.execute("play_media", mapOf("url" to "not-a-url"))
+            }
+            TestEngine.result("bad_url_output", (badResult ?: "TIMEOUT").take(150))
+
+            if (badResult == null) {
+                TestEngine.fail("play_media timed out on bad URL")
+                return false
+            }
+            if (!badResult.contains("错误") && !badResult.contains("无效")) {
+                TestEngine.fail("play_media should reject bad URL, got: $badResult")
+                return false
+            }
+
+            // Test 2: Valid-looking URL — should attempt to open (may fail in test but no crash)
+            val okResult = withTimeoutOrNull(5000L) {
+                registry.execute("play_media", mapOf("url" to "https://example.com"))
+            }
+            TestEngine.result("ok_url_output", (okResult ?: "TIMEOUT").take(150))
+
+            if (okResult == null) {
+                TestEngine.fail("play_media timed out on valid URL")
+                return false
+            }
+
+            TestEngine.pass()
+            return true
+        } catch (e: Exception) {
+            TestEngine.fail("play_media exception: ${e.message}")
             return false
         }
     }

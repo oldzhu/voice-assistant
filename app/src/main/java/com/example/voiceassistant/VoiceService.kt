@@ -43,6 +43,8 @@ import com.example.voiceassistant.tools.CreateToolTool
 import com.example.voiceassistant.tools.SetReminderTool
 import com.example.voiceassistant.tools.CancelReminderTool
 import com.example.voiceassistant.tools.ListRemindersTool
+import com.example.voiceassistant.tools.SearchMediaTool
+import com.example.voiceassistant.tools.PlayMediaTool
 import com.example.voiceassistant.llm.transport.StdioMcpTransport
 import com.example.voiceassistant.llm.transport.HttpMcpTransport
 import com.example.voiceassistant.llm.McpClient
@@ -310,6 +312,9 @@ class VoiceService : Service(), LifecycleOwner {
                 register(SetReminderTool({ this@VoiceService }, { filesDir }))
                 register(CancelReminderTool({ this@VoiceService }, { filesDir }))
                 register(ListRemindersTool({ filesDir }))
+                // Media search & playback
+                register(SearchMediaTool())
+                register(PlayMediaTool({ this@VoiceService }))
             }
             // L3: restore previously-generated tools (after toolRegistry is assigned)
             createTool.restoreFromDisk()
