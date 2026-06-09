@@ -70,8 +70,7 @@ class VoiceService : Service(), LifecycleOwner {
         private const val HISTORY_MAX_SIZE = 20
         private const val PAUSE_BEFORE_LISTEN_MS = 1500L
         private const val LISTEN_RESTART_DELAY_MS = 2000L
-        const val ACTION_TEST_TTS = "com.example.voiceassistant.TEST_TTS"
-        /** New structured test action — supports test_type extra */
+        /** Structured test action — supports test_type extra */
         const val ACTION_RUN_TEST = "com.example.voiceassistant.RUN_TEST"
         const val TEST_TEXT = "我是猪头您的手机个人语音助手"
         private const val MAX_TEST_ATTEMPTS = 3
@@ -442,56 +441,26 @@ class VoiceService : Service(), LifecycleOwner {
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
         debugLog("Audio mode restored: VOICE_COMMUNICATION + MODE_IN_COMMUNICATION")
         debugLog("========== TEST END: $testType ==========")
-    }
 
-    // ── Old test methods (kept for backward compat, delegate to TestEngine) ──
-
-    private fun runTtsTest() {
-        // Legacy path: used by internal retry loop
-        testType = TestRunner.TEST_TTS_ROUNDTRIP
-        lifecycleScope.launch { runTest() }
+        // Exit test mode and resume normal listening
+        testMode = false
+        delay(500)
+        startListening()
     }
 
     private fun onTestAsrResult(recognized: String) {
-        // Capture result for TestRunner
+        // Forward ASR result to TestRunner (used by acoustic tests)
         testRunner?.onAsrResult(recognized)
-        // Legacy: compute similarity
-        val similarity = TestEngine.textSimilarity(TEST_TEXT, recognized)
-        debugLog("TEST recognized: '$recognized' similarity=$similarity%")
-        TestEngine.result("similarity", similarity.toString())
-        TestEngine.result("recognized", recognized)
-
-        if (similarity >= 60) {
-            TestEngine.pass()
-            testMode = false
-            lifecycleScope.launch { delay(1000); startListening() }
-        } else if (testAttempt < MAX_TEST_ATTEMPTS) {
-            TestEngine.log("Test attempt $testAttempt failed ($similarity%), retrying...")
-            lifecycleScope.launch {
-                delay(1500)
-                // Only auto-retry for single tts_roundtrip — don't cascade "all" or e2e
-                if (testType == TestRunner.TEST_TTS_ROUNDTRIP) {
-                    runTest()
-                }
-            }
-        } else {
-            TestEngine.fail("similarity=$similarity% < 60% after $MAX_TEST_ATTEMPTS attempts")
-            testMode = false
-            lifecycleScope.launch { delay(1000); startListening() }
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         debugLog("===== onStartCommand ===== initialized=$initialized")
-        // Test mode dispatch: check for test_type or legacy TEST_TTS
+        // Test mode dispatch: check for test_type extra
         val testTypeExtra = intent?.getStringExtra("test_type")
         if (testTypeExtra != null) {
             testMode = true; testAttempt = 0
             testType = testTypeExtra
             debugLog("TEST MODE enabled: $testType")
-        } else if (intent?.action == ACTION_TEST_TTS || intent?.getStringExtra("action") == "TEST_TTS") {
-            testMode = true; testAttempt = 0; testType = TestRunner.TEST_TTS_ROUNDTRIP
-            debugLog("TEST MODE enabled (legacy)")
         }
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         createNotificationChannel()

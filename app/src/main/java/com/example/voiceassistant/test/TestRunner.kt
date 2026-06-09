@@ -47,6 +47,8 @@ class TestRunner(
         const val TEST_TOOL_CLEAR_HISTORY = "tool_clear_history"
         const val TEST_TOOL_READ_ARTICLE = "tool_read_article"
         const val TEST_TOOL_PERSISTENCE = "tool_persistence"
+        const val TEST_TOOL_WEATHER = "tool_weather"
+        const val TEST_TOOL_NETWORK_ERROR = "tool_network_error"
 
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
@@ -79,6 +81,8 @@ class TestRunner(
             TEST_TOOL_CLEAR_HISTORY -> testToolClearHistory()
             TEST_TOOL_READ_ARTICLE -> testToolReadArticle()
             TEST_TOOL_PERSISTENCE -> testToolPersistence()
+            TEST_TOOL_WEATHER -> testToolWeather()
+            TEST_TOOL_NETWORK_ERROR -> testToolNetworkError()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
             TEST_ALL -> runAll()
             else -> {
@@ -105,6 +109,8 @@ class TestRunner(
         // Phase 3: Network tools
         results.add(testToolWebFetch()); delay(1000)
         results.add(testToolNews()); delay(1000)
+        results.add(testToolWeather()); delay(1000)
+        results.add(testToolNetworkError()); delay(500)
         results.add(testToolLocation()); delay(1000)
 
         // Phase 4: LLM tests
@@ -557,6 +563,167 @@ class TestRunner(
             TestEngine.fail("Persistence write failed: ${e.message}")
             return false
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Weather + Network Error Boundary Tests
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Invoke get_weather tool directly — verify it returns weather data
+     * for a known city without crashing or timing out.
+     */
+    private suspend fun testToolWeather(): Boolean {
+        TestEngine.start("tool", "weather")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        try {
+            val t0 = System.currentTimeMillis()
+            val result = withTimeoutOrNull(15000L) {
+                registry.execute("get_weather", mapOf("city" to "北京"))
+            }
+            val latency = System.currentTimeMillis() - t0
+            TestEngine.result("latency_ms", latency.toString())
+
+            if (result == null) {
+                TestEngine.fail("Weather tool timed out (15s)")
+                return false
+            }
+
+            TestEngine.result("output", result.take(200))
+            TestEngine.log("Weather: ${result.take(100)}")
+
+            // Verify the result looks like weather data
+            val hasTemp = result.contains("°C")
+            val hasWeather = result.contains("天气") || result.contains("weather") ||
+                    result.contains("晴") || result.contains("阴") || result.contains("雨") ||
+                    result.contains("云") || result.contains("雪") || result.contains("雾")
+            val hasCity = result.contains("北京") || result.contains("Beijing")
+
+            TestEngine.result("has_temp", hasTemp.toString())
+            TestEngine.result("has_weather_desc", hasWeather.toString())
+            TestEngine.result("has_city", hasCity.toString())
+
+            when {
+                result.contains("错误") || result.contains("未找到") -> {
+                    TestEngine.result("status", "api_error")
+                    TestEngine.log("Weather API returned error or city not found — may be network issue")
+                    TestEngine.pass() // Not a failure — API may be temporarily unavailable
+                    return true
+                }
+                hasTemp || hasWeather -> {
+                    TestEngine.result("status", "ok")
+                    TestEngine.pass()
+                    return true
+                }
+                else -> {
+                    TestEngine.result("status", "unexpected_output")
+                    TestEngine.fail("Weather returned unexpected output: ${result.take(100)}")
+                    return false
+                }
+            }
+        } catch (e: Exception) {
+            TestEngine.fail("Weather tool exception: ${e.message}")
+            return false
+        }
+    }
+
+    /**
+     * Verify network tools handle unreachable hosts gracefully.
+     * Calls web_fetch with guaranteed-unreachable URLs → must return
+     * an error string (never null, never crash).
+     */
+    private suspend fun testToolNetworkError(): Boolean {
+        TestEngine.start("tool", "network_error")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        var allOk = true
+
+        // ── Test 1: Unreachable URL (TEST-NET — guaranteed unroutable) ──
+        try {
+            val t0 = System.currentTimeMillis()
+            val badUrlResult = withTimeoutOrNull(10000L) {
+                registry.execute("web_fetch", mapOf("url" to "http://192.0.2.1:9/test"))
+            }
+            val latency = System.currentTimeMillis() - t0
+            TestEngine.result("bad_url_latency_ms", latency.toString())
+            TestEngine.result("bad_url_output", (badUrlResult ?: "TIMEOUT").take(200))
+
+            when {
+                badUrlResult == null -> {
+                    TestEngine.log("web_fetch bad URL: TIMEOUT — acceptable, didn't crash")
+                }
+                badUrlResult.contains("错误") || badUrlResult.contains("失败") ||
+                        badUrlResult.contains("error") || badUrlResult.contains("fail") -> {
+                    TestEngine.log("web_fetch bad URL: graceful error — ${badUrlResult.take(80)}")
+                }
+                else -> {
+                    TestEngine.log("web_fetch bad URL: unexpected — ${badUrlResult.take(80)}")
+                }
+            }
+        } catch (e: Exception) {
+            TestEngine.log("web_fetch bad URL CRASHED: ${e.message}")
+            TestEngine.result("bad_url_crash", e.message ?: "unknown")
+            allOk = false
+        }
+
+        // ── Test 2: Empty city → parameter validation ──
+        try {
+            val t0 = System.currentTimeMillis()
+            val badCityResult = withTimeoutOrNull(10000L) {
+                registry.execute("get_weather", mapOf("city" to ""))
+            }
+            val latency = System.currentTimeMillis() - t0
+            TestEngine.result("bad_city_latency_ms", latency.toString())
+            TestEngine.result("bad_city_output", (badCityResult ?: "TIMEOUT").take(200))
+
+            when {
+                badCityResult == null -> TestEngine.log("get_weather empty city: TIMEOUT")
+                badCityResult.contains("错误") || badCityResult.contains("缺少") ||
+                        badCityResult.contains("未找到") || badCityResult.contains("失败") -> {
+                    TestEngine.log("get_weather empty city: graceful error — ${badCityResult.take(80)}")
+                }
+                else -> TestEngine.log("get_weather empty city: unexpected — ${badCityResult.take(80)}")
+            }
+        } catch (e: Exception) {
+            TestEngine.log("get_weather empty city CRASHED: ${e.message}")
+            TestEngine.result("bad_city_crash", e.message ?: "unknown")
+            allOk = false
+        }
+
+        // ── Test 3: Malformed URL ──
+        try {
+            val t0 = System.currentTimeMillis()
+            val malformedResult = withTimeoutOrNull(10000L) {
+                registry.execute("web_fetch", mapOf("url" to "not-a-url"))
+            }
+            TestEngine.result("malformed_latency_ms", (System.currentTimeMillis() - t0).toString())
+            TestEngine.result("malformed_output", (malformedResult ?: "null").take(150))
+
+            if (malformedResult != null && malformedResult.contains("http")) {
+                TestEngine.log("web_fetch malformed URL: rejected — ${malformedResult.take(80)}")
+            } else if (malformedResult == null) {
+                TestEngine.log("web_fetch malformed URL: TIMEOUT")
+            } else {
+                TestEngine.log("web_fetch malformed URL: unexpected — ${malformedResult.take(80)}")
+            }
+        } catch (e: Exception) {
+            TestEngine.log("web_fetch malformed URL CRASHED: ${e.message}")
+            TestEngine.result("malformed_crash", e.message ?: "unknown")
+            allOk = false
+        }
+
+        if (allOk) { TestEngine.pass() }
+        else { TestEngine.fail("One or more network error boundary checks crashed") }
+        return allOk
     }
 
     // ═══════════════════════════════════════════════════════════

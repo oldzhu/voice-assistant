@@ -26,9 +26,11 @@ Test types:
       tool_clear_history — clear_history
       tool_read_article  — Read article tool
       tool_persistence   — Conversation persistence across restarts (two-phase)
+      tool_weather      — Weather lookup for known city
+      tool_network_error — Graceful handling of bad URLs, empty params
     LLM-mediated (v2.0):
       llm_multi_tool    — ≥2 tool calls in one response
-    all            — Run all 14 tests
+    all            — Run all 16 tests
 """
 import argparse
 import json
@@ -273,7 +275,8 @@ def main():
         default="all",
         choices=["all", "init", "tts_roundtrip", "llm_connectivity", "llm_tools", "e2e_full_pipeline",
                  "tool_location", "tool_news", "tool_web_fetch", "tool_config", "tool_memory",
-                 "tool_barge_in", "tool_clear_history", "tool_read_article", "tool_persistence", "llm_multi_tool"],
+                 "tool_barge_in", "tool_clear_history", "tool_read_article", "tool_persistence",
+                 "tool_weather", "tool_network_error", "llm_multi_tool"],
         help="Test type to run (default: all)"
     )
     parser.add_argument("--no-build", action="store_true", help="Skip build step")
