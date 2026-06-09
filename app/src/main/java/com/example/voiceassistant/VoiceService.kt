@@ -571,7 +571,7 @@ class VoiceService : Service(), LifecycleOwner {
         try {
             // Use tool-calling engine if available, fall back to plain chat
             val result = if (engine != null) {
-                withTimeoutOrNull(30000L) {
+                withTimeoutOrNull(60000L) {
                     engine.chat(text, conversationHistory)
                 }
             } else {
