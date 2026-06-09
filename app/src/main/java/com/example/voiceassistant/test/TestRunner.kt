@@ -795,9 +795,14 @@ class TestRunner(
                 return false
             }
 
-            // Step 4: Clean up — unregister the test tool
+            // Step 4: Clean up — unregister + delete persisted file
             registry.unregister("reverse_text")
-            TestEngine.result("cleanup", "unregistered")
+            try {
+                java.io.File(filesDir(), "generated_tools/reverse_text.json").delete()
+                TestEngine.result("cleanup", "unregistered+file_deleted")
+            } catch (_: Exception) {
+                TestEngine.result("cleanup", "unregistered")
+            }
 
             TestEngine.pass()
             return true
