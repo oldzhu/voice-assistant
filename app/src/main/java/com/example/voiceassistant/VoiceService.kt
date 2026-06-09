@@ -40,6 +40,9 @@ import com.example.voiceassistant.tools.UpdateConfigTool
 import com.example.voiceassistant.tools.RememberTool
 import com.example.voiceassistant.tools.RecallTool
 import com.example.voiceassistant.tools.CreateToolTool
+import com.example.voiceassistant.tools.SetReminderTool
+import com.example.voiceassistant.tools.CancelReminderTool
+import com.example.voiceassistant.tools.ListRemindersTool
 import com.example.voiceassistant.llm.transport.StdioMcpTransport
 import com.example.voiceassistant.llm.transport.HttpMcpTransport
 import com.example.voiceassistant.llm.McpClient
@@ -303,6 +306,10 @@ class VoiceService : Service(), LifecycleOwner {
                     { generatedToolsDir }
                 )
                 register(createTool)
+                // Reminders
+                register(SetReminderTool({ this@VoiceService }, { filesDir }))
+                register(CancelReminderTool({ this@VoiceService }, { filesDir }))
+                register(ListRemindersTool({ filesDir }))
             }
             // L3: restore previously-generated tools (after toolRegistry is assigned)
             createTool.restoreFromDisk()
@@ -467,6 +474,16 @@ class VoiceService : Service(), LifecycleOwner {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         debugLog("===== onStartCommand ===== initialized=$initialized")
+        // Handle reminder firings
+        if (intent?.action == "com.example.voiceassistant.REMINDER_FIRED") {
+            val message = intent.getStringExtra("reminder_message") ?: "时间到了！"
+            debugLog("REMINDER FIRED: $message")
+            lifecycleScope.launch {
+                // Briefly interrupt and speak the reminder
+                speakTts("提醒：$message")
+            }
+            return START_STICKY
+        }
         // Test mode dispatch: check for test_type extra
         val testTypeExtra = intent?.getStringExtra("test_type")
         if (testTypeExtra != null) {

@@ -29,9 +29,10 @@ Test types:
       tool_weather      — Weather lookup for known city
       tool_network_error — Graceful handling of bad URLs, empty params
       tool_mcp_create    — LLM generates + registers + executes a custom tool
+      tool_reminder      — Set/list/cancel timed voice reminders
     LLM-mediated (v2.0):
       llm_multi_tool    — ≥2 tool calls in one response
-    all            — Run all 17 tests
+    all            — Run all 18 tests
 """
 import argparse
 import json
@@ -277,7 +278,8 @@ def main():
         choices=["all", "init", "tts_roundtrip", "llm_connectivity", "llm_tools", "e2e_full_pipeline",
                  "tool_location", "tool_news", "tool_web_fetch", "tool_config", "tool_memory",
                  "tool_barge_in", "tool_clear_history", "tool_read_article", "tool_persistence",
-                 "tool_weather", "tool_network_error", "tool_mcp_create", "llm_multi_tool"],
+                 "tool_weather", "tool_network_error", "tool_mcp_create", "tool_reminder",
+                 "llm_multi_tool"],
         help="Test type to run (default: all)"
     )
     parser.add_argument("--no-build", action="store_true", help="Skip build step")

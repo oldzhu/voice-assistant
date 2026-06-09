@@ -50,6 +50,7 @@ class TestRunner(
         const val TEST_TOOL_WEATHER = "tool_weather"
         const val TEST_TOOL_NETWORK_ERROR = "tool_network_error"
         const val TEST_TOOL_MCP_CREATE = "tool_mcp_create"
+        const val TEST_TOOL_REMINDER = "tool_reminder"
 
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
@@ -85,6 +86,7 @@ class TestRunner(
             TEST_TOOL_WEATHER -> testToolWeather()
             TEST_TOOL_NETWORK_ERROR -> testToolNetworkError()
             TEST_TOOL_MCP_CREATE -> testToolMcpCreate()
+            TEST_TOOL_REMINDER -> testToolReminder()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
             TEST_ALL -> runAll()
             else -> {
@@ -114,6 +116,7 @@ class TestRunner(
         results.add(testToolWeather()); delay(1000)
         results.add(testToolNetworkError()); delay(500)
         results.add(testToolMcpCreate()); delay(1000)
+        results.add(testToolReminder()); delay(500)
         results.add(testToolLocation()); delay(1000)
 
         // Phase 4: LLM tests
@@ -808,6 +811,66 @@ class TestRunner(
             return true
         } catch (e: Exception) {
             TestEngine.fail("MCP create test exception: ${e.message}")
+            return false
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Reminder Test
+    // ═══════════════════════════════════════════════════════════
+
+    private suspend fun testToolReminder(): Boolean {
+        TestEngine.start("tool", "reminder")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        try {
+            // Step 1: Set a short reminder
+            val setResult = withTimeoutOrNull(5000L) {
+                registry.execute("set_reminder", mapOf(
+                    "minutes" to "1",
+                    "message" to "测试喝水"
+                ))
+            }
+
+            TestEngine.result("set_output", (setResult ?: "TIMEOUT").take(150))
+
+            if (setResult == null || !setResult.contains("已设置")) {
+                TestEngine.fail("set_reminder failed: $setResult")
+                return false
+            }
+
+            // Step 2: List reminders — should have at least 1
+            val listResult = withTimeoutOrNull(5000L) {
+                registry.execute("list_reminders", emptyMap())
+            }
+
+            TestEngine.result("list_output", (listResult ?: "TIMEOUT").take(200))
+
+            if (listResult == null || !listResult.contains("测试喝水")) {
+                TestEngine.fail("list_reminders didn't show the reminder: $listResult")
+                return false
+            }
+
+            // Step 3: Cancel the reminder
+            val cancelResult = withTimeoutOrNull(5000L) {
+                registry.execute("cancel_reminder", emptyMap())
+            }
+
+            TestEngine.result("cancel_output", (cancelResult ?: "TIMEOUT").take(150))
+
+            if (cancelResult == null || !cancelResult.contains("已取消") && !cancelResult.contains("cancelled")) {
+                TestEngine.fail("cancel_reminder failed: $cancelResult")
+                return false
+            }
+
+            TestEngine.pass()
+            return true
+        } catch (e: Exception) {
+            TestEngine.fail("Reminder test exception: ${e.message}")
             return false
         }
     }
