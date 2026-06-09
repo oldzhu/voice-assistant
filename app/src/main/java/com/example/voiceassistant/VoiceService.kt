@@ -39,6 +39,7 @@ import com.example.voiceassistant.tools.ReadAloudTool
 import com.example.voiceassistant.tools.UpdateConfigTool
 import com.example.voiceassistant.tools.RememberTool
 import com.example.voiceassistant.tools.RecallTool
+import com.example.voiceassistant.tools.CreateToolTool
 import com.example.voiceassistant.llm.transport.StdioMcpTransport
 import com.example.voiceassistant.llm.transport.HttpMcpTransport
 import com.example.voiceassistant.llm.McpClient
@@ -262,6 +263,7 @@ class VoiceService : Service(), LifecycleOwner {
         // Initialize tool calling system
         val cloudBackend = llmBackend as? CloudLLMBackend
         if (cloudBackend != null) {
+            lateinit var createTool: CreateToolTool
             toolRegistry = ToolRegistry().apply {
                 register(SetSpeechRateTool { rate ->
                     val cfg = ConfigManager(this@VoiceService)
@@ -293,7 +295,17 @@ class VoiceService : Service(), LifecycleOwner {
                 register(UpdateConfigTool { ConfigManager(this@VoiceService) })
                 register(RememberTool { File(filesDir, "assistant_memory.json") })
                 register(RecallTool { File(filesDir, "assistant_memory.json") })
+                // L3: Self-generated tools
+                val generatedToolsDir = File(filesDir, "generated_tools").also { it.mkdirs() }
+                createTool = CreateToolTool(
+                    { toolRegistry },
+                    { getBackendForDynamicTool() },
+                    { generatedToolsDir }
+                )
+                register(createTool)
             }
+            // L3: restore previously-generated tools (after toolRegistry is assigned)
+            createTool.restoreFromDisk()
             toolCallEngine = ToolCallEngine(cloudBackend, toolRegistry)
             debugLog("Tools registered: ${toolRegistry.getAll().map { it.name }}")
 
@@ -679,6 +691,12 @@ class VoiceService : Service(), LifecycleOwner {
     }
 
     /** Connect to configured MCP servers and register their tools. */
+    /**
+     * Returns the LLM backend for DynamicTool execution.
+     * Dynamic tools use simple chat (no tool calling) to avoid recursion.
+     */
+    private fun getBackendForDynamicTool(): LLMBackend? = llmBackend
+
     private suspend fun connectMcpServers(cloudBackend: CloudLLMBackend) {
         val config = ConfigManager(this@VoiceService)
         val servers = config.mcpServers

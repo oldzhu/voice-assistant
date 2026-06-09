@@ -49,6 +49,7 @@ class TestRunner(
         const val TEST_TOOL_PERSISTENCE = "tool_persistence"
         const val TEST_TOOL_WEATHER = "tool_weather"
         const val TEST_TOOL_NETWORK_ERROR = "tool_network_error"
+        const val TEST_TOOL_MCP_CREATE = "tool_mcp_create"
 
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
@@ -83,6 +84,7 @@ class TestRunner(
             TEST_TOOL_PERSISTENCE -> testToolPersistence()
             TEST_TOOL_WEATHER -> testToolWeather()
             TEST_TOOL_NETWORK_ERROR -> testToolNetworkError()
+            TEST_TOOL_MCP_CREATE -> testToolMcpCreate()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
             TEST_ALL -> runAll()
             else -> {
@@ -111,6 +113,7 @@ class TestRunner(
         results.add(testToolNews()); delay(1000)
         results.add(testToolWeather()); delay(1000)
         results.add(testToolNetworkError()); delay(500)
+        results.add(testToolMcpCreate()); delay(1000)
         results.add(testToolLocation()); delay(1000)
 
         // Phase 4: LLM tests
@@ -724,6 +727,84 @@ class TestRunner(
         if (allOk) { TestEngine.pass() }
         else { TestEngine.fail("One or more network error boundary checks crashed") }
         return allOk
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // L3: MCP Create Tool Test
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Test the create_tool meta-tool: generate a simple tool → verify registration
+     * → execute the new tool → verify it returns useful output.
+     */
+    private suspend fun testToolMcpCreate(): Boolean {
+        TestEngine.start("tool", "mcp_create")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        try {
+            // Step 1: Create a simple "reverse text" tool
+            val createResult = withTimeoutOrNull(10000L) {
+                registry.execute("create_tool", mapOf(
+                    "tool_name" to "reverse_text",
+                    "tool_description" to "反转文字顺序。如用户说'把XX反过来'时调用。",
+                    "parameters_json" to """{"text":"string"}""",
+                    "prompt_template" to "把以下文字反转顺序输出，只返回反转后的结果：{text}"
+                ))
+            }
+
+            TestEngine.result("create_output", (createResult ?: "TIMEOUT").take(200))
+
+            if (createResult == null) {
+                TestEngine.fail("create_tool timed out")
+                return false
+            }
+
+            if (!createResult.contains("已创建") && !createResult.contains("created")) {
+                TestEngine.fail("create_tool failed: $createResult")
+                return false
+            }
+
+            TestEngine.log("Tool created: $createResult")
+
+            // Step 2: Verify the tool is registered
+            if (!registry.has("reverse_text")) {
+                TestEngine.fail("Tool 'reverse_text' not found in registry after creation")
+                return false
+            }
+            TestEngine.result("tool_registered", "true")
+
+            // Step 3: Execute the new tool
+            val execResult = withTimeoutOrNull(15000L) {
+                registry.execute("reverse_text", mapOf("text" to "你好世界"))
+            }
+
+            TestEngine.result("exec_output", (execResult ?: "TIMEOUT").take(200))
+            TestEngine.log("Dynamic tool result: '${execResult?.take(80)}'")
+
+            if (execResult == null) {
+                TestEngine.fail("Dynamic tool execution timed out")
+                return false
+            }
+
+            if (execResult.isBlank()) {
+                TestEngine.fail("Dynamic tool returned empty result")
+                return false
+            }
+
+            // Step 4: Clean up — unregister the test tool
+            registry.unregister("reverse_text")
+            TestEngine.result("cleanup", "unregistered")
+
+            TestEngine.pass()
+            return true
+        } catch (e: Exception) {
+            TestEngine.fail("MCP create test exception: ${e.message}")
+            return false
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
