@@ -27,34 +27,48 @@
 - **Session persistence**: ConversationStore — atomic writes (temp→rename), conversation survives app restart/kill
 - **README.md**: comprehensive project docs (architecture diagram, tool matrix, bilingual doc index)
 
+### v5 — Cleanup + Hardening 🧹
+- Removed legacy test code duplicates
+- Added tool_weather + tool_network_error direct tests
+- Network-disconnect error boundary tests
+
+### v6 — L3 Self-Generated MCP Tools 🧠
+- create_tool meta-tool: LLM writes its own prompt-template tools
+- DynamicTool: prompt-template execution (no recursion)
+- Generated tools persisted to disk, restored on startup
+
+### v7 — Timed Reminders ⏰
+- set_reminder, cancel_reminder, list_reminders tools
+- AlarmManager scheduling + TTS announcement
+- Survives app restart (persisted reminder store)
+
+### v8 — Media Search + Playback 🎵
+- search_media: cn.bing.com scrape → result list
+- play_media: ACTION_VIEW Intent → open in browser/app
+- Novel reading via web_fetch → TTS
+
+### v9 — Skill System 🧩
+- Multi-step workflows with TTS progress reporting (`Flow<SkillStep>`)
+- `.skill.md` file format for user-installable skills
+- `SkillToolAdapter`: Skill → Tool transparent wrapping (LLM sees skills as tools)
+- Built-in `MorningRoutineSkill` (weather + news chain)
+- Skill auto-test (`skill_system`)
+
 ---
 
 ## For Discussion 📋
 
-### Option A: Cleanup + Hardening 🧹
-- Remove old `runTtsTest()` duplicate trigger
-- Add `tool_weather` direct test
-- Network-disconnect error boundary tests
-**Auto-test**: `tool_weather` + `tool_network_error`
-**Difficulty**: Low. Mostly cleanup and test coverage.
+### Option A: Context Memory 🧠
+Remember user preferences across sessions — favorite city, preferred news category, speech rate preference.
+**Difficulty**: Low-Medium. Builds on existing ConfigManager + RememberTool.
 
-### Option B: L3 Self-Generated MCP Tools 🧠
-**Feature**: LLM writes its own tool scripts. User "I need currency conversion"→ LLM generates Python→stdio MCP launch→registered in ToolRegistry.
-**Auto-test**: `tool_mcp_create` — generate simple tool → verify registration → verify execution.
-**Difficulty**: Medium. Architecture ready (StdioMcpTransport + McpClient).
+### Option B: Agent Swarm 🐝
+Multi-agent collaboration. Spawn sub-agents for parallel tasks (e.g., search weather + news simultaneously).
+**Difficulty**: High. Needs AgentSwarmBus + sub-agent lifecycle management.
 
-### Option C: Timed Reminders / Alarms ⏰
-**Feature**: "Remind me to drink water in 15 minutes"→ AlarmManager schedule → TTS announcement.
-**Auto-test**: `tool_reminder` — register alarm → `dumpsys alarm` verify.
-**Difficulty**: Medium. Needs precise AlarmManager + foreground Service wakeup.
+### Option C: Multi-modal + Personality 🎭
+Camera integration, screen understanding, custom personality/voice.
+**Difficulty**: High. Needs CLIP/VLM integration + personality system.
 
-### Option D: Media Search + Playback 🎵
-**Feature**: Search songs/videos/novels → play, not just return links.
-- **Novels**: web_fetch content → TTS read aloud ✅ existing capability
-- **Songs**: Search → open music app (Intent) or find free audio sources
-- **Videos**: Search → `Intent.ACTION_VIEW` open YouTube/Bilibili
-**Auto-test**: `tool_media_search` — search → verify playable content returned.
-**Difficulty**: Novels low, songs high, videos medium.
-
-### Option E: User-Proposed Features
+### Option D: User-Proposed Features
 (TBD — open for discussion)

@@ -165,6 +165,7 @@ class ToolCallEngine(
         append("当用户说「读一下XX」「念XX」「给我读XX」时，调用 read_article(query=\"XX\") 获取文章内容。获取到的文本会由语音引擎朗读给用户，所以你只需要输出工具的返回内容即可，不要额外总结。")
         append("但如果用户只是说出古诗名（如「静夜思」）、常见成语、简短名句，你可以直接背诵内容，不需要调用工具。read_article 用于搜索你不熟悉的长文、文章、新闻。")
         append("不要调用不相关的工具。聊天、问候、闲聊时直接文本回复，不要调用任何工具。")
+        append("重要：如果用户请求需要多步骤操作，可以调用 skill_ 开头的技能工具。技能会自动完成所有步骤并报告进度，你只需要等待最终结果。")
 
         // Self-improvement: L2 — configuration
         append("你可以通过 update_config 工具记住用户偏好。")

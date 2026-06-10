@@ -30,6 +30,8 @@ Test types:
       tool_network_error — Graceful handling of bad URLs, empty params
       tool_mcp_create    — LLM generates + registers + executes a custom tool
       tool_reminder      — Set/list/cancel timed voice reminders
+    Skill:
+      skill_system       — Skill registration + execution
     LLM-mediated (v2.0):
       llm_multi_tool    — ≥2 tool calls in one response
     all            — Run all 18 tests
@@ -279,6 +281,7 @@ def main():
                  "tool_location", "tool_news", "tool_web_fetch", "tool_config", "tool_memory",
                  "tool_barge_in", "tool_clear_history", "tool_read_article", "tool_persistence",
                  "tool_weather", "tool_network_error", "tool_mcp_create", "tool_reminder",
+                 "tool_search_media", "tool_play_media", "skill_system",
                  "llm_multi_tool"],
         help="Test type to run (default: all)"
     )

@@ -45,6 +45,9 @@ import com.example.voiceassistant.tools.CancelReminderTool
 import com.example.voiceassistant.tools.ListRemindersTool
 import com.example.voiceassistant.tools.SearchMediaTool
 import com.example.voiceassistant.tools.PlayMediaTool
+import com.example.voiceassistant.skill.SkillRegistry
+import com.example.voiceassistant.skill.SkillExecutor
+import com.example.voiceassistant.skill.builtin.MorningRoutineSkill
 import com.example.voiceassistant.llm.transport.StdioMcpTransport
 import com.example.voiceassistant.llm.transport.HttpMcpTransport
 import com.example.voiceassistant.llm.McpClient
@@ -123,6 +126,10 @@ class VoiceService : Service(), LifecycleOwner {
     // Tool calling
     private lateinit var toolRegistry: ToolRegistry
     private lateinit var toolCallEngine: ToolCallEngine
+
+    // Skill system
+    private lateinit var skillRegistry: SkillRegistry
+    private lateinit var skillExecutor: SkillExecutor
 
     private val conversationLogFile by lazy { File(filesDir, "conversation.txt") }
     private val backupDir by lazy { File(filesDir, "backups").also { it.mkdirs() } }
@@ -323,6 +330,25 @@ class VoiceService : Service(), LifecycleOwner {
 
             // Connect MCP servers and register their tools
             lifecycleScope.launch { connectMcpServers(cloudBackend) }
+
+            // Skill system
+            val skillDir = File(filesDir, "skills").also { it.mkdirs() }
+            skillExecutor = SkillExecutor(
+                toolRegistry,
+                ttsSpeaker = { msg ->
+                    val sanitized = TtsTextSanitizer.sanitize(msg)
+                    speakTts(sanitized)
+                },
+                filesDir = filesDir
+            )
+            skillRegistry = SkillRegistry(toolRegistry) {
+                skillExecutor.createContext()
+            }
+            // Register built-in skills
+            skillRegistry.register(MorningRoutineSkill())
+            debugLog("Built-in skills registered: ${skillRegistry.getAll().map { it.name }}")
+            // Load bundled skills from assets
+            lifecycleScope.launch { loadBundledSkills(skillDir, skillRegistry) }
         } else {
             debugLog("Local backend does not support function calling; tools disabled")
         }
@@ -349,6 +375,7 @@ class VoiceService : Service(), LifecycleOwner {
             llmBackend = { llmBackend },
             toolCallEngine = { if (::toolCallEngine.isInitialized) toolCallEngine else null },
             toolRegistry = { if (::toolRegistry.isInitialized) toolRegistry else null },
+            skillRegistry = { if (::skillRegistry.isInitialized) skillRegistry else null },
             filesDir = { filesDir }
         )
 
@@ -810,5 +837,27 @@ class VoiceService : Service(), LifecycleOwner {
             debugLog("Restore failed: ${e.message}")
             ""
         }
+    }
+
+    /**
+     * Copy bundled .skill.md files from assets/skills/ to filesDir,
+     * then load them into the SkillRegistry.
+     */
+    private suspend fun loadBundledSkills(skillDir: File, registry: SkillRegistry) {
+        try {
+            val assetFiles = assets.list("skills") ?: emptyArray()
+            for (filename in assetFiles) {
+                if (!filename.endsWith(".skill.md")) continue
+                val content = assets.open("skills/$filename").bufferedReader().use { it.readText() }
+                val file = File(skillDir, filename)
+                file.writeText(content)
+            }
+        } catch (_: Exception) {
+            debugLog("No bundled skills found in assets/skills/")
+        }
+
+        // Load from filesDir
+        val count = registry.loadFromDirectory(skillDir)
+        debugLog("Skills loaded: $count")
     }
 }

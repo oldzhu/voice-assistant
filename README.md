@@ -123,6 +123,14 @@ voice-assistant/
 │       │   ├── DynamicTool.kt       # L3 prompt-as-tool runtime
 │       │   ├── CreateToolTool.kt    # L3 tool factory (tool_mcp_create)
 │       │   └── SelfImprovementTools.kt  # Memory & config tools
+│       ├── skill/                    # Skill system (v9)
+│       │   ├── Skill.kt             # Skill interface + SkillStep
+│       │   ├── SkillRegistry.kt     # Skill registration & loading
+│       │   ├── SkillToolAdapter.kt  # Skill → Tool adapter
+│       │   ├── SkillParser.kt       # .skill.md parser
+│       │   ├── SkillExecutor.kt     # Context factory
+│       │   └── builtin/
+│       │       └── MorningRoutineSkill.kt  # Demo: weather + news chain
 │       └── test/
 │           ├── TestEngine.kt        # ADB-driven test harness
 │           └── TestRunner.kt        # Test case runner
@@ -135,6 +143,7 @@ voice-assistant/
 │   ├── TESTING_zh.md / TESTING_en.md
 │   ├── CHANGELOG_zh.md / CHANGELOG_en.md
 │   ├── TTS_SANITIZER_DESIGN_zh.md / TTS_SANITIZER_DESIGN_en.md
+│   ├── SKILL_SYSTEM_zh.md / SKILL_SYSTEM_en.md
 │   ├── SELF_IMPROVEMENT.md
 │   └── plans/                       # Design proposals
 └── app/build/outputs/apk/debug/

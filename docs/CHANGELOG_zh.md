@@ -2,6 +2,23 @@
 
 所有值得注意的变更记录。遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式。
 
+## [v1.7] — 2026-06-10
+
+### 新增
+- **技能系统（`skill/` 包）**：多步骤工作流 + TTS 进度播报
+  - `Skill` 接口：`execute(args, context) → Flow<SkillStep>` — 每步发射进度
+  - `SkillContext`：向 skill 提供 `callTool`、`speakProgress`、`filesDir`
+  - `SkillRegistry`：管理 skill 生命周期，从磁盘加载 `.skill.md` 文件
+  - `SkillToolAdapter`：透明地将 `Skill` 包装为 `Tool` — LLM 调用 `skill_<name>` 与普通 tool 无异
+  - `SkillParser`：解析 `.skill.md` YAML frontmatter 为可执行的 `FileDefinedSkill`
+  - `SkillExecutor`：创建接入真实 ToolRegistry + TTS 的 `SkillContext`
+  - 内置 `MorningRoutineSkill`：链式调用 get_location → get_weather → get_news，带 TTS 进度
+  - 内置资源：`assets/skills/morning-routine.skill.md` 用于演示和分发
+  - LLM system prompt 已更新：LLM 知道对多步骤任务调用 `skill_*` 工具
+- **自动测试**：`skill_system` 测试已加入 TestRunner + runner.py
+- **文档**：`docs/SKILL_SYSTEM_zh.md` + `docs/SKILL_SYSTEM_en.md`
+- **路线图**：已更新 — v5–v9 标记为已完成，新增 A–D 选项供讨论
+
 ## [v1.6] — 2026-06-09
 
 ### 新增

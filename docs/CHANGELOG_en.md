@@ -2,6 +2,23 @@
 
 All notable changes are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [v1.7] — 2026-06-10
+
+### Added
+- **Skill System (`skill/` package)**: multi-step workflows with TTS progress reporting
+  - `Skill` interface: `execute(args, context) → Flow<SkillStep>` — emit progress per step
+  - `SkillContext`: provides `callTool(name, args)`, `speakProgress(msg)`, `filesDir` to skills
+  - `SkillRegistry`: manages skill lifecycle, loads `.skill.md` files from disk
+  - `SkillToolAdapter`: transparently wraps `Skill` as `Tool` — LLM calls `skill_<name>` like any tool
+  - `SkillParser`: parses `.skill.md` YAML frontmatter into executable `FileDefinedSkill`
+  - `SkillExecutor`: creates `SkillContext` wired to real ToolRegistry + TTS
+  - Built-in `MorningRoutineSkill`: chains get_location → get_weather → get_news with progress TTS
+  - Bundled asset: `assets/skills/morning-routine.skill.md` for demonstration and distribution
+  - LLM system prompt updated: LLM knows to call `skill_*` tools for multi-step tasks
+- **Auto-test**: `skill_system` test added to TestRunner + runner.py
+- **Docs**: `docs/SKILL_SYSTEM_zh.md` + `docs/SKILL_SYSTEM_en.md`
+- **ROADMAP**: updated — v5–v9 completed, new options A–D for discussion
+
 ## [v1.6] — 2026-06-09
 
 ### Added

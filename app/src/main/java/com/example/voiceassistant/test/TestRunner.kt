@@ -4,6 +4,7 @@ import com.example.voiceassistant.llm.CloudLLMBackend
 import com.example.voiceassistant.llm.LLMBackend
 import com.example.voiceassistant.llm.ToolCallEngine
 import com.example.voiceassistant.llm.ToolRegistry
+import com.example.voiceassistant.skill.SkillRegistry
 import com.example.voiceassistant.speech.SherpaAsrEngine
 import com.example.voiceassistant.speech.SystemTtsEngine
 import com.example.voiceassistant.speech.SherpaTtsEngine
@@ -24,6 +25,7 @@ class TestRunner(
     private val llmBackend: () -> LLMBackend?,
     private val toolCallEngine: () -> ToolCallEngine?,
     private val toolRegistry: () -> ToolRegistry?,
+    private val skillRegistry: () -> SkillRegistry?,
     private val filesDir: () -> java.io.File
 ) {
     companion object {
@@ -53,6 +55,7 @@ class TestRunner(
         const val TEST_TOOL_REMINDER = "tool_reminder"
         const val TEST_TOOL_SEARCH_MEDIA = "tool_search_media"
         const val TEST_TOOL_PLAY_MEDIA = "tool_play_media"
+        const val TEST_SKILL_SYSTEM = "skill_system"
 
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
@@ -91,6 +94,7 @@ class TestRunner(
             TEST_TOOL_REMINDER -> testToolReminder()
             TEST_TOOL_SEARCH_MEDIA -> testToolSearchMedia()
             TEST_TOOL_PLAY_MEDIA -> testToolPlayMedia()
+            TEST_SKILL_SYSTEM -> testSkillSystem()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
             TEST_ALL -> runAll()
             else -> {
@@ -123,6 +127,7 @@ class TestRunner(
         results.add(testToolReminder()); delay(500)
         results.add(testToolSearchMedia()); delay(1000)
         results.add(testToolPlayMedia()); delay(500)
+        results.add(testSkillSystem()); delay(1000)
         results.add(testToolLocation()); delay(1000)
 
         // Phase 4: LLM tests
@@ -1383,5 +1388,57 @@ class TestRunner(
 
     fun onAsrResult(text: String) {
         lastAsrResult = text
+    }
+
+    // ── Skill System test ──────────────────────────────────
+
+    private suspend fun testSkillSystem(): Boolean {
+        TestEngine.start("skill", "registration + execution")
+
+        val skillReg = skillRegistry()
+        val toolReg = toolRegistry()
+        if (skillReg == null || toolReg == null) {
+            TestEngine.fail("skillRegistry or toolRegistry is null")
+            return false
+        }
+
+        // 1. Verify skill is registered in SkillRegistry
+        val skill = skillReg.get("morning_routine")
+        val hasSkill = skill != null
+        if (!hasSkill) {
+            TestEngine.fail("morning_routine not found in SkillRegistry")
+            return false
+        }
+
+        // 2. Verify skill is exposed as a Tool (skill_morning_routine)
+        val hasAdapter = toolReg.has("skill_morning_routine")
+        if (!hasAdapter) {
+            TestEngine.fail("skill_morning_routine not found in ToolRegistry")
+            return false
+        }
+
+        // 3. Execute skill via ToolRegistry (simulates LLM calling it)
+        val result = withTimeoutOrNull(30000L) {
+            toolReg.execute("skill_morning_routine", emptyMap())
+        }
+        if (result == null) {
+            TestEngine.fail("skill execution timed out")
+            return false
+        }
+
+        TestEngine.result("result_len", result.length.toString())
+        TestEngine.result("result_preview", result.take(200))
+
+        val success = result.contains("早晨 routine 完成") ||
+                      result.contains("weather") || result.contains("天气") ||
+                      result.contains("news") || result.contains("新闻")
+
+        if (success) {
+            TestEngine.pass()
+            return true
+        } else {
+            TestEngine.fail("skill result unexpected: ${result.take(100)}")
+            return false
+        }
     }
 }
