@@ -54,21 +54,37 @@
 - 内置 `MorningRoutineSkill`（天气+新闻链式调用）
 - 技能自动测试（`skill_system`）
 
+### v10 — 上下文记忆 🧠
+- `MemoryManager`：集中管理，去重，访问追踪
+- 自动注入 top 5 记忆到 system prompt
+- LLM 自动记住个人信息，无需显式"记住XX"
+- 记忆去重：重复事实更新时间戳
+
+### v11 — Agent Swarm 🐝
+- 并行工具执行：LLM 发出多个 tool_call 时并发执行
+- `swarm_query` 工具：显式并行 LLM 查询（对比、多项目查询）
+- System prompt 教 LLM 何时使用 swarm
+
+### v12 — 人格系统 🎭
+- 可配置助手名称、语气（友好/专业/幽默/简洁）、口头禅
+- `set_personality` 工具：自然语言修改人格
+- 每轮 system prompt 顶部注入人格配置
+
 ---
 
 ## 待讨论 📋
 
-### 选项 A：上下文记忆 🧠
-跨会话记住用户偏好 — 常用城市、偏好新闻类别、语速偏好等。
-**难度**：低-中。基于现有 ConfigManager + RememberTool。
+### 选项 A：多模态 — 拍照识别 📷
+拍照 → LLM vision API 描述 → TTS 朗读。
+**难度**：中-高。需要相机权限、图像捕获、vision 模型。
 
-### 选项 B：Agent Swarm 多智能体 🐝
-多 Agent 协作，spawn 子 Agent 并行执行任务（如同时搜索天气和新闻）。
-**难度**：高。需要 AgentSwarmBus + 子 Agent 生命周期管理。
+### 选项 B：屏幕理解 📱
+截图 → OCR → 上下文感知协助。
+**难度**：中。需要 MediaProjection + OCR。
 
-### 选项 C：多模态 + 人格 🎭
-摄像头集成、屏幕理解、自定义人格/语气。
-**难度**：高。需要 CLIP/VLM 集成 + 人格系统。
+### 选项 C：多设备同步 🔗
+手机 ↔ 电脑 ↔ 服务器 Agent 同步。
+**难度**：高。需要网络基础设施 + 协议。
 
 ### 选项 D：用户提议的其他功能
 （待讨论补充）

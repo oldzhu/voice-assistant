@@ -54,21 +54,38 @@
 - Built-in `MorningRoutineSkill` (weather + news chain)
 - Skill auto-test (`skill_system`)
 
+### v10 — Context Memory 🧠
+- `MemoryManager`: centralized store with dedup, access tracking
+- Auto-inject top 5 memories into system prompt each turn
+- LLM auto-remembers personal facts without explicit "remember X" command
+- Memory dedup: duplicates refresh timestamp instead of duplicating
+
+### v11 — Agent Swarm 🐝
+- Parallel tool execution: when LLM emits multiple tool_calls, run concurrently
+- `swarm_query` tool: explicit parallel LLM queries for comparisons
+- System prompt teaches LLM to use swarm for multi-item lookups
+
+### v12 — Personality 🎭
+- Configurable assistant name, tone (friendly/professional/funny/concise), catchphrase
+- `set_personality` tool: natural language persona changes
+- Personality injected at top of system prompt each turn
+- Friendly tone default with natural colloquial Chinese
+
 ---
 
 ## For Discussion 📋
 
-### Option A: Context Memory 🧠
-Remember user preferences across sessions — favorite city, preferred news category, speech rate preference.
-**Difficulty**: Low-Medium. Builds on existing ConfigManager + RememberTool.
+### Option A: Multi-modal — Camera + Vision 📷
+Take photo → LLM vision API description → TTS read aloud.
+**Difficulty**: Medium-High. Needs camera permission, image capture, vision-capable LLM endpoint.
 
-### Option B: Agent Swarm 🐝
-Multi-agent collaboration. Spawn sub-agents for parallel tasks (e.g., search weather + news simultaneously).
-**Difficulty**: High. Needs AgentSwarmBus + sub-agent lifecycle management.
+### Option B: Screen Understanding 📱
+Screenshot → OCR → context-aware assistance.
+**Difficulty**: Medium. Needs MediaProjection + OCR.
 
-### Option C: Multi-modal + Personality 🎭
-Camera integration, screen understanding, custom personality/voice.
-**Difficulty**: High. Needs CLIP/VLM integration + personality system.
+### Option C: Multi-device Sync 🔗
+Phone ↔ PC ↔ Server agent synchronization.
+**Difficulty**: High. Needs network infrastructure + protocol.
 
 ### Option D: User-Proposed Features
 (TBD — open for discussion)
