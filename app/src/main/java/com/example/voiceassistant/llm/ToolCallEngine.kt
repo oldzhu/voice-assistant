@@ -2,6 +2,8 @@ package com.example.voiceassistant.llm
 
 import android.util.Log
 import com.google.gson.Gson
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Orchestrates the LLM ↔ tool execution loop.
@@ -103,30 +105,25 @@ class ToolCallEngine(
                 messages.add(rawMsg)
             }
 
-            // Execute all tools, collect outputs
-            val toolOutputs = mutableListOf<Pair<String, String>>() // (tool_call_id, output)
-            for ((funcName, funcArgs) in allCalls) {
-                val output = toolRegistry.execute(funcName, funcArgs)
-                Log.i(TAG, "Turn $turn: $funcName → ${output.take(80)}")
+            // Execute all tools IN PARALLEL, collect outputs
+            // When LLM emits multiple independent tool_calls, run them concurrently
+            val toolOutputs = coroutineScope {
+                allCalls.map { (funcName, funcArgs) ->
+                    async {
+                        val output = toolRegistry.execute(funcName, funcArgs)
+                        Log.i(TAG, "Turn $turn: $funcName → ${output.take(80)}")
 
-                // Timeout check
-                if (output.contains("超时") || output.contains("Timed out") ||
-                    output.contains("Unable to resolve host") || output.contains("connect timed out")) {
-                    Log.w(TAG, "Turn $turn: $funcName timeout → breaking")
-                    // Still add the error as tool output so the LLM sees it
-                    toolOutputs.add(Pair("call_${funcName}_$turn", output))
-                    break
-                }
+                        // Extract tool_call_id from raw message
+                        @Suppress("UNCHECKED_CAST")
+                        val tcs = rawMsg?.get("tool_calls") as? List<Map<String, Any?>>
+                        val callId = tcs?.find {
+                            @Suppress("UNCHECKED_CAST")
+                            (it?.get("function") as? Map<String, Any?>)?.get("name") == funcName
+                        }?.get("id") as? String ?: "call_${funcName}_$turn"
 
-                // Extract tool_call_id from raw message
-                @Suppress("UNCHECKED_CAST")
-                val tcs = rawMsg?.get("tool_calls") as? List<Map<String, Any?>>
-                val callId = tcs?.find {
-                    @Suppress("UNCHECKED_CAST")
-                    (it?.get("function") as? Map<String, Any?>)?.get("name") == funcName
-                }?.get("id") as? String ?: "call_${funcName}_$turn"
-
-                toolOutputs.add(Pair(callId, output))
+                        Pair(callId, output)
+                    }
+                }.map { it.await() }.toMutableList()
             }
 
             // Add all tool result messages
@@ -167,6 +164,8 @@ class ToolCallEngine(
         append("但如果用户只是说出古诗名（如「静夜思」）、常见成语、简短名句，你可以直接背诵内容，不需要调用工具。read_article 用于搜索你不熟悉的长文、文章、新闻。")
         append("不要调用不相关的工具。聊天、问候、闲聊时直接文本回复，不要调用任何工具。")
         append("重要：如果用户请求需要多步骤操作，可以调用 skill_ 开头的技能工具。技能会自动完成所有步骤并报告进度，你只需要等待最终结果。")
+        append("当用户需要对比、同时查询多个独立信息时（如「对比两个城市的天气」「查科技和体育新闻」），" +
+            "使用 swarm_query 工具并行查询。用 ||| 分隔每个子查询，每个子查询要求简短回答（不超过30字）。")
 
         // Self-improvement: L2 — configuration
         append("你可以通过 update_config 工具记住用户偏好。")

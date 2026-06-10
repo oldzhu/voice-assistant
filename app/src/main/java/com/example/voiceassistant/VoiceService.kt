@@ -46,6 +46,7 @@ import com.example.voiceassistant.tools.CancelReminderTool
 import com.example.voiceassistant.tools.ListRemindersTool
 import com.example.voiceassistant.tools.SearchMediaTool
 import com.example.voiceassistant.tools.PlayMediaTool
+import com.example.voiceassistant.tools.SwarmTool
 import com.example.voiceassistant.skill.SkillRegistry
 import com.example.voiceassistant.skill.SkillExecutor
 import com.example.voiceassistant.skill.builtin.MorningRoutineSkill
@@ -331,6 +332,8 @@ class VoiceService : Service(), LifecycleOwner {
                 // Media search & playback
                 register(SearchMediaTool())
                 register(PlayMediaTool({ this@VoiceService }))
+                // Swarm: parallel LLM queries
+                register(SwarmTool({ getBackendForDynamicTool() }))
             }
             // L3: restore previously-generated tools (after toolRegistry is assigned)
             createTool.restoreFromDisk()
