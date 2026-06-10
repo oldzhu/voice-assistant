@@ -42,7 +42,8 @@ class ToolCallEngine(
      */
     suspend fun chat(
         userMessage: String,
-        history: List<LLMBackend.ChatMessage>
+        history: List<LLMBackend.ChatMessage>,
+        memoryContext: String = ""
     ): Result<String> {
         // Build initial message list as Maps — supports tool-role messages
         // that don't fit the simple ChatMessage model.
@@ -51,7 +52,7 @@ class ToolCallEngine(
         // System prompt — tells LLM it has tools and how to use them
         messages.add(mapOf(
             "role" to "system",
-            "content" to buildSystemPrompt()
+            "content" to buildSystemPrompt(memoryContext)
         ))
 
         // Conversation history (last 10 messages to manage context)
@@ -152,7 +153,7 @@ class ToolCallEngine(
      * System prompt that teaches the LLM about its tool-calling capability.
      * Written in Chinese because the user interacts in Chinese.
      */
-    private fun buildSystemPrompt(): String = buildString {
+    private fun buildSystemPrompt(memoryContext: String = ""): String = buildString {
         append("你是猪头助手，一个友好的中文语音助手。")
         append("你可以调用工具来执行操作（调整设置、搜索信息、获取天气、新闻、位置，以及记忆和配置管理等）。")
         append("当用户要求执行某个操作时，请直接调用对应的工具函数，不要用文字描述你将要做什么。")
@@ -174,7 +175,13 @@ class ToolCallEngine(
 
         // Self-improvement: L4 — memory
         append("当用户说'记住XX'或分享重要信息时，调用 remember 保存。")
+        append("重要：即使用户没有明确说'记住'，只要用户在对话中透露了新的个人信息（如名字、城市、爱好、工作等），你也应该主动调用 remember 保存。")
         append("当用户问'你都知道我什么'或'还记得XX吗'时，调用 what_do_you_know。")
-        append("每次对话开始时，如果有用户记忆，先调用 what_do_you_know 回顾一下。")
+
+        // Inject memory context (auto-populated from past conversations)
+        if (memoryContext.isNotBlank()) {
+            append("\n")
+            append(memoryContext)
+        }
     }
 }

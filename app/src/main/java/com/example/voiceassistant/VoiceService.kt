@@ -20,6 +20,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.lifecycleScope
 import com.example.voiceassistant.config.ConfigManager
 import com.example.voiceassistant.config.ConversationStore
+import com.example.voiceassistant.config.MemoryManager
 import com.example.voiceassistant.llm.CloudLLMBackend
 import com.example.voiceassistant.llm.LLMBackend
 import com.example.voiceassistant.llm.LocalLLMBackend
@@ -130,6 +131,9 @@ class VoiceService : Service(), LifecycleOwner {
     // Skill system
     private lateinit var skillRegistry: SkillRegistry
     private lateinit var skillExecutor: SkillExecutor
+
+    // Memory system
+    private lateinit var memoryManager: MemoryManager
 
     private val conversationLogFile by lazy { File(filesDir, "conversation.txt") }
     private val backupDir by lazy { File(filesDir, "backups").also { it.mkdirs() } }
@@ -272,6 +276,11 @@ class VoiceService : Service(), LifecycleOwner {
         llmBackend = createLLMBackend()
         debugLog("LLM backend ready")
 
+        // Init memory system (before tools — RememberTool/RecallTool need it)
+        memoryManager = MemoryManager(File(filesDir, "assistant_memory.json"))
+        memoryManager.load()
+        debugLog("Memory loaded: ${memoryManager.size()} entries")
+
         // Initialize tool calling system
         val cloudBackend = llmBackend as? CloudLLMBackend
         if (cloudBackend != null) {
@@ -305,8 +314,8 @@ class VoiceService : Service(), LifecycleOwner {
                 register(ReadAloudTool())
                 // L2+L4: Self-improvement
                 register(UpdateConfigTool { ConfigManager(this@VoiceService) })
-                register(RememberTool { File(filesDir, "assistant_memory.json") })
-                register(RecallTool { File(filesDir, "assistant_memory.json") })
+                register(RememberTool { memoryManager })
+                register(RecallTool { memoryManager })
                 // L3: Self-generated tools
                 val generatedToolsDir = File(filesDir, "generated_tools").also { it.mkdirs() }
                 createTool = CreateToolTool(
@@ -599,7 +608,7 @@ class VoiceService : Service(), LifecycleOwner {
             // Use tool-calling engine if available, fall back to plain chat
             val result = if (engine != null) {
                 withTimeoutOrNull(60000L) {
-                    engine.chat(text, conversationHistory)
+                    engine.chat(text, conversationHistory, memoryManager.formatForPrompt())
                 }
             } else {
                 withTimeoutOrNull(15000L) {
