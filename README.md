@@ -23,7 +23,7 @@
                │        │        │
           ┌────▼──┐ ┌──▼────────▼──┐
           │ Tools  │ │   State      │
-          │  20    │ │   Machine    │
+          │  22    │ │   Machine    │
           │ tools  │ │  LISTENING   │
           │        │ │  THINKING    │
           │ weather│ │  SPEAKING    │
@@ -38,7 +38,7 @@
 | Stage | Tech | Notes |
 |-------|------|-------|
 | **ASR** (Speech → Text) | Sherpa-ONNX Paraformer bilingual zh-en | Streaming, int8 quantized, 227MB |
-| **LLM** (Text → Reply) | DeepSeek v4-flash via API | Tool-calling with 20 tools |
+| **LLM** (Text → Reply) | DeepSeek v4-flash via API | Tool-calling with 22 tools |
 | **TTS** (Reply → Speech) | System TTS (com.yuemeng.speechsuite) | 275 voices, local, ~1s init |
 | **VAD** | Silero VAD ONNX | Prevents silent mic noise from triggering ASR |
 
@@ -60,7 +60,7 @@
 
 ---
 
-## 🧰 Tools / 工具 (20 total)
+## 🧰 Tools / 工具 (22 total)
 
 | Tool | Description |
 |------|-------------|
@@ -78,6 +78,8 @@
 | `create_tool` | L3 self-generating tools (LLM prompt-as-tool) |
 | `remember` | Save user facts to persistent memory |
 | `what_do_you_know` | Recall saved memories |
+| `describe_photo` | Take photo → Vision AI description |
+| `capture_screen` | Screenshot → OCR text extraction + visual description |
 | `update_config` | Change settings at runtime |
 | `set_speech_rate` | Adjust TTS speed |
 | `set_barge_in_mode` | Toggle interrupt mode (off/on/keyword) |
@@ -122,7 +124,10 @@ voice-assistant/
 │       │   ├── ReminderTool.kt      # Timed reminders + AlarmReceiver
 │       │   ├── DynamicTool.kt       # L3 prompt-as-tool runtime
 │       │   ├── CreateToolTool.kt    # L3 tool factory (tool_mcp_create)
-│       │   └── SelfImprovementTools.kt  # Memory & config tools
+│       │   ├── SelfImprovementTools.kt  # Memory & config tools
+│       │   ├── DescribeImageTool.kt # Camera photo → Vision AI
+│       │   ├── ScreenCaptureTool.kt # Screenshot → OCR + Vision AI
+│       │   └── ScreenCaptureManager.kt  # MediaProjection bridge
 │       ├── skill/                    # Skill system (v9)
 │       │   ├── Skill.kt             # Skill interface + SkillStep
 │       │   ├── SkillRegistry.kt     # Skill registration & loading
@@ -216,6 +221,7 @@ Requires ADB connected. Tests cover ASR, TTS, tools, LLM roundtrip, and acoustic
 - **Session persistence** — conversation history survives app restart/process death
 - **DORMANT state** — keyword-triggered sleep conserves battery during runs
 - **Barge-in modes** — off (stop ASR during TTS), on (continuous listening), keyword (interrupt on wake word)
+- **Multi-modal Vision** — camera photo + screen capture → DeepSeek Vision API → TTS description
 - **Test-First** — new features require automated tests before implementation
 - **Bilingual docs** — every design doc has `_zh.md` + `_en.md` pair
 
@@ -230,10 +236,11 @@ Requires ADB connected. Tests cover ASR, TTS, tools, LLM roundtrip, and acoustic
 | Build | Gradle 9 (Kotlin DSL) |
 | ASR | Sherpa-ONNX 1.13.2, Paraformer streaming |
 | VAD | Silero VAD ONNX |
-| LLM | DeepSeek v4-flash (OpenAI-compatible API) |
+| LLM | DeepSeek v4-flash (OpenAI-compatible API, Vision) |
 | TTS | OPPO/Realme System TTS (com.yuemeng.speechsuite) |
 | Testing | Python 3, ADB, pytest |
 | MCP | Stdio + HTTP transports |
+| Vision | CameraX, MediaProjection, Base64 image → DeepSeek Vision |
 
 ---
 

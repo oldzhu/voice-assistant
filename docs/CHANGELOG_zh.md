@@ -19,6 +19,20 @@
 - **文档**：`docs/SKILL_SYSTEM_zh.md` + `docs/SKILL_SYSTEM_en.md`
 - **路线图**：已更新 — v5–v9 标记为已完成，新增 A–D 选项供讨论
 
+## [v1.8] — 2026-06-10
+
+### 新增
+- **多模态 — 拍照 + 截屏识别（Phase 5）**：视觉 AI 理解图像内容
+  - `describe_photo` 工具：启动系统相机 → 拍照 → Base64 → DeepSeek Vision API → TTS 描述
+  - `capture_screen` 工具：MediaProjection 截屏 → JPEG → Vision API → 文字提取 + 画面描述
+  - 三种模式：`text`（仅 OCR 提取文字）、`describe`（仅描述画面）、`full`（提取文字 + 描述）
+  - `ScreenCaptureManager`：静态桥接 Service ↔ Activity（解决 Service 无法 `startActivityForResult` 的问题）
+  - `CloudLLMBackend.describeImage()`：OpenAI 兼容 multimodal message 格式发送 Base64 图片
+  - `DescribeImageTool`：相机 FileProvider + EXTRA_OUTPUT + 轮询等待照片写入
+- **AndroidManifest 更新**：CAMERA 权限、FileProvider 注册、file_paths.xml
+- **自动测试**：`tool_describe_photo` + `tool_capture_screen` 测试类型（手动测试为主，需相机/屏幕权限）
+- **System prompt 更新**：LLM 学会何时调用视觉工具（"看看这是什么"→describe_photo，"截屏识别"→capture_screen）
+
 ## [v1.6] — 2026-06-09
 
 ### 新增

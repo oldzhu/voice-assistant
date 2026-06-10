@@ -19,6 +19,20 @@ All notable changes are documented here. Follows [Keep a Changelog](https://keep
 - **Docs**: `docs/SKILL_SYSTEM_zh.md` + `docs/SKILL_SYSTEM_en.md`
 - **ROADMAP**: updated — v5–v9 completed, new options A–D for discussion
 
+## [v1.8] — 2026-06-10
+
+### Added
+- **Multi-modal — Camera + Screen Capture (Phase 5)**: Vision AI for image understanding
+  - `describe_photo` tool: system camera → photo → Base64 → DeepSeek Vision API → TTS description
+  - `capture_screen` tool: MediaProjection screenshot → JPEG → Vision API → text extraction + visual description
+  - Three modes: `text` (OCR only), `describe` (visual only), `full` (text + description)
+  - `ScreenCaptureManager`: static bridge Service ↔ Activity (solves `startActivityForResult` from Service)
+  - `CloudLLMBackend.describeImage()`: OpenAI-compatible multimodal message format for Base64 images
+  - `DescribeImageTool`: camera FileProvider + EXTRA_OUTPUT + polling for photo write completion
+- **AndroidManifest updates**: CAMERA permission, FileProvider registration, file_paths.xml
+- **Auto-test**: `tool_describe_photo` + `tool_capture_screen` test types (manual primary, needs camera/screen)
+- **System prompt update**: LLM knows when to call vision tools ("what is this"→describe_photo, "read screen"→capture_screen)
+
 ## [v1.6] — 2026-06-09
 
 ### Added

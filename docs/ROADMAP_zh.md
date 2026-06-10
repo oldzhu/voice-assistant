@@ -70,17 +70,16 @@
 - `set_personality` 工具：自然语言修改人格
 - 每轮 system prompt 顶部注入人格配置
 
+### v13 — 多模态视觉 📷📱
+- `describe_photo`：拍照 → Base64 → DeepSeek Vision API → TTS 描述
+- `capture_screen`：MediaProjection 截屏 → Vision API → 文字提取 + 画面描述
+- `ScreenCaptureManager`：静态桥接 Service ↔ Activity
+- `CloudLLMBackend.describeImage()`：OpenAI 兼容 multimodal 图片发送
+- 三种模式：text（OCR）、describe（描述）、full（文字+描述）
+
 ---
 
 ## 待讨论 📋
-
-### 选项 A：多模态 — 拍照识别 📷
-拍照 → LLM vision API 描述 → TTS 朗读。
-**难度**：中-高。需要相机权限、图像捕获、vision 模型。
-
-### 选项 B：屏幕理解 📱
-截图 → OCR → 上下文感知协助。
-**难度**：中。需要 MediaProjection + OCR。
 
 ### 选项 C：多设备同步 🔗
 手机 ↔ 电脑 ↔ 服务器 Agent 同步。

@@ -69,21 +69,19 @@
 - Configurable assistant name, tone (friendly/professional/funny/concise), catchphrase
 - `set_personality` tool: natural language persona changes
 - Personality injected at top of system prompt each turn
-- Friendly tone default with natural colloquial Chinese
+
+### v13 — Multi-modal Vision 📷📱
+- `describe_photo`: camera photo → Base64 → DeepSeek Vision API → TTS description
+- `capture_screen`: MediaProjection screenshot → Vision API → text extraction + visual description
+- `ScreenCaptureManager`: static bridge Service ↔ Activity
+- `CloudLLMBackend.describeImage()`: OpenAI-compatible multimodal image sending
+- Three modes: text (OCR), describe (visual), full (text + description)
 
 ---
 
 ## For Discussion 📋
 
-### Option A: Multi-modal — Camera + Vision 📷
-Take photo → LLM vision API description → TTS read aloud.
-**Difficulty**: Medium-High. Needs camera permission, image capture, vision-capable LLM endpoint.
-
-### Option B: Screen Understanding 📱
-Screenshot → OCR → context-aware assistance.
-**Difficulty**: Medium. Needs MediaProjection + OCR.
-
-### Option C: Multi-device Sync 🔗
+### Option C: Multi-device Sync
 Phone ↔ PC ↔ Server agent synchronization.
 **Difficulty**: High. Needs network infrastructure + protocol.
 
