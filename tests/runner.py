@@ -32,9 +32,12 @@ Test types:
       tool_reminder      — Set/list/cancel timed voice reminders
     Skill:
       skill_system       — Skill registration + execution
+    Vision / Multi-modal:
+      tool_describe_photo — Verify describe_photo tool registration
+      tool_capture_screen — Verify capture_screen tool registration
     LLM-mediated (v2.0):
       llm_multi_tool    — ≥2 tool calls in one response
-    all            — Run all 18 tests
+    all            — Run all tests
 """
 import argparse
 import json
@@ -282,6 +285,7 @@ def main():
                  "tool_barge_in", "tool_clear_history", "tool_read_article", "tool_persistence",
                  "tool_weather", "tool_network_error", "tool_mcp_create", "tool_reminder",
                  "tool_search_media", "tool_play_media", "skill_system",
+                 "tool_describe_photo", "tool_capture_screen",
                  "llm_multi_tool"],
         help="Test type to run (default: all)"
     )

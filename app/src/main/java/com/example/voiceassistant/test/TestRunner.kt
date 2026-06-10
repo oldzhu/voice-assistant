@@ -57,6 +57,10 @@ class TestRunner(
         const val TEST_TOOL_PLAY_MEDIA = "tool_play_media"
         const val TEST_SKILL_SYSTEM = "skill_system"
 
+        // ── Vision / Multi-modal tests ──
+        const val TEST_TOOL_DESCRIBE_PHOTO = "tool_describe_photo"
+        const val TEST_TOOL_CAPTURE_SCREEN = "tool_capture_screen"
+
         // ── New LLM-mediated test ──
         const val TEST_LLM_MULTI_TOOL = "llm_multi_tool"
 
@@ -96,6 +100,8 @@ class TestRunner(
             TEST_TOOL_PLAY_MEDIA -> testToolPlayMedia()
             TEST_SKILL_SYSTEM -> testSkillSystem()
             TEST_LLM_MULTI_TOOL -> testLlmMultiTool()
+            TEST_TOOL_DESCRIBE_PHOTO -> testToolDescribePhoto()
+            TEST_TOOL_CAPTURE_SCREEN -> testToolCaptureScreen()
             TEST_ALL -> runAll()
             else -> {
                 TestEngine.start("unknown", testType)
@@ -1440,5 +1446,59 @@ class TestRunner(
             TestEngine.fail("skill result unexpected: ${result.take(100)}")
             return false
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Vision / Multi-modal Tests (registration-only, no camera/screen)
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Verify describe_photo tool is registered and accessible.
+     * Does NOT actually take a photo — that requires user interaction.
+     */
+    private suspend fun testToolDescribePhoto(): Boolean {
+        TestEngine.start("tool", "describe_photo")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        val hasTool = registry.has("describe_photo")
+        TestEngine.result("registered", hasTool.toString())
+
+        if (!hasTool) {
+            TestEngine.fail("describe_photo tool not registered")
+            return false
+        }
+
+        TestEngine.log("describe_photo tool registered; manual camera test needed")
+        TestEngine.pass()
+        return true
+    }
+
+    /**
+     * Verify capture_screen tool is registered and accessible.
+     * Does NOT actually capture screen — that requires MediaProjection permission.
+     */
+    private suspend fun testToolCaptureScreen(): Boolean {
+        TestEngine.start("tool", "capture_screen")
+
+        val registry = toolRegistry() ?: run {
+            TestEngine.fail("ToolRegistry not initialized")
+            return false
+        }
+
+        val hasTool = registry.has("capture_screen")
+        TestEngine.result("registered", hasTool.toString())
+
+        if (!hasTool) {
+            TestEngine.fail("capture_screen tool not registered")
+            return false
+        }
+
+        TestEngine.log("capture_screen tool registered; manual screen capture test needed")
+        TestEngine.pass()
+        return true
     }
 }
