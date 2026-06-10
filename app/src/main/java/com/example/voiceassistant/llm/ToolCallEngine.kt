@@ -45,7 +45,8 @@ class ToolCallEngine(
     suspend fun chat(
         userMessage: String,
         history: List<LLMBackend.ChatMessage>,
-        memoryContext: String = ""
+        memoryContext: String = "",
+        personalityPrompt: String = ""
     ): Result<String> {
         // Build initial message list as Maps — supports tool-role messages
         // that don't fit the simple ChatMessage model.
@@ -54,7 +55,7 @@ class ToolCallEngine(
         // System prompt — tells LLM it has tools and how to use them
         messages.add(mapOf(
             "role" to "system",
-            "content" to buildSystemPrompt(memoryContext)
+            "content" to buildSystemPrompt(memoryContext, personalityPrompt)
         ))
 
         // Conversation history (last 10 messages to manage context)
@@ -150,7 +151,9 @@ class ToolCallEngine(
      * System prompt that teaches the LLM about its tool-calling capability.
      * Written in Chinese because the user interacts in Chinese.
      */
-    private fun buildSystemPrompt(memoryContext: String = ""): String = buildString {
+    private fun buildSystemPrompt(memoryContext: String = "", personalityPrompt: String = ""): String = buildString {
+        // Personality comes first — defines the assistant's character
+        append(personalityPrompt)
         append("你是猪头助手，一个友好的中文语音助手。")
         append("你可以调用工具来执行操作（调整设置、搜索信息、获取天气、新闻、位置，以及记忆和配置管理等）。")
         append("当用户要求执行某个操作时，请直接调用对应的工具函数，不要用文字描述你将要做什么。")

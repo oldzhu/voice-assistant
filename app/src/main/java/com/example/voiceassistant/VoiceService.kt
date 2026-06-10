@@ -40,6 +40,7 @@ import com.example.voiceassistant.tools.ReadAloudTool
 import com.example.voiceassistant.tools.UpdateConfigTool
 import com.example.voiceassistant.tools.RememberTool
 import com.example.voiceassistant.tools.RecallTool
+import com.example.voiceassistant.tools.SetPersonalityTool
 import com.example.voiceassistant.tools.CreateToolTool
 import com.example.voiceassistant.tools.SetReminderTool
 import com.example.voiceassistant.tools.CancelReminderTool
@@ -315,6 +316,7 @@ class VoiceService : Service(), LifecycleOwner {
                 register(ReadAloudTool())
                 // L2+L4: Self-improvement
                 register(UpdateConfigTool { ConfigManager(this@VoiceService) })
+                register(SetPersonalityTool { ConfigManager(this@VoiceService) })
                 register(RememberTool { memoryManager })
                 register(RecallTool { memoryManager })
                 // L3: Self-generated tools
@@ -611,7 +613,9 @@ class VoiceService : Service(), LifecycleOwner {
             // Use tool-calling engine if available, fall back to plain chat
             val result = if (engine != null) {
                 withTimeoutOrNull(60000L) {
-                    engine.chat(text, conversationHistory, memoryManager.formatForPrompt())
+                    engine.chat(text, conversationHistory,
+                        memoryManager.formatForPrompt(),
+                        ConfigManager(this@VoiceService).buildPersonalityPrompt())
                 }
             } else {
                 withTimeoutOrNull(15000L) {

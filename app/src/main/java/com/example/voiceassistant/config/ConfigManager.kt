@@ -151,6 +151,41 @@ class ConfigManager(context: Context) {
         }
         return result
     }
+
+    // ── Personality ──────────────────────────────────────────
+
+    /** Assistant's self-name (default: 猪头). */
+    var assistantName: String
+        get() = getUserPreference("assistant_name") ?: "猪头"
+        set(value) { setUserPreference("assistant_name", value) }
+
+    /** Tone: friendly | professional | funny | concise */
+    var tone: String
+        get() = getUserPreference("tone") ?: "friendly"
+        set(value) { setUserPreference("tone", value) }
+
+    /** Catchphrase appended to some responses. Empty = none. */
+    var catchphrase: String
+        get() = getUserPreference("catchphrase") ?: ""
+        set(value) { setUserPreference("catchphrase", value) }
+
+    /** Build a personality block for the system prompt. */
+    fun buildPersonalityPrompt(): String = buildString {
+        val name = assistantName
+        val t = tone
+        val phrase = catchphrase
+        append("你的名字叫$name。")
+        append("语气风格：$t。")
+        when (t) {
+            "friendly" -> append("用温暖友好的语气回复，多用'呀''啦''哦'等语气词。")
+            "professional" -> append("用专业简洁的语气回复，避免口语化表达。")
+            "funny" -> append("用幽默风趣的语气回复，可以适当开玩笑。")
+            "concise" -> append("回复尽量简短，1-2句话即可。")
+        }
+        if (phrase.isNotBlank()) {
+            append("偶尔在回复末尾加上口头禅：「$phrase」。")
+        }
+    }
 }
 
 /** Configuration for a single MCP server. */

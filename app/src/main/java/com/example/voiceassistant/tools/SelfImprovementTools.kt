@@ -1,6 +1,7 @@
 package com.example.voiceassistant.tools
 
 import com.example.voiceassistant.config.ConfigManager
+import com.example.voiceassistant.config.MemoryManager
 import com.example.voiceassistant.llm.Tool
 import com.example.voiceassistant.llm.ToolParameter
 import com.google.gson.Gson
@@ -90,5 +91,54 @@ class RecallTool(private val memoryManager: () -> com.example.voiceassistant.con
     override suspend fun execute(args: Map<String, Any?>): String {
         val query = args["query"] as? String ?: ""
         return memoryManager().formatResults(query)
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+// Personality: SetPersonalityTool — change assistant character
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Tool: set_personality — change the assistant's personality.
+ *
+ * Users can say "你以后说话幽默一点" or LLM can decide to change tone.
+ * Modifies ConfigManager personality settings.
+ */
+class SetPersonalityTool(private val config: () -> ConfigManager) : Tool {
+    override val name = "set_personality"
+    override val description = "修改助手的性格。用户说'你以后幽默一点'、'换个语气'、" +
+        "'你的口头禅改成XX'时调用。支持修改名称、语气、口头禅。"
+    override val parameters = mapOf(
+        "name" to ToolParameter("string", "新的名字，如'小助手'", required = false),
+        "tone" to ToolParameter("string", "语气风格：friendly(友好), professional(专业), funny(幽默), concise(简洁)", required = false),
+        "catchphrase" to ToolParameter("string", "口头禅，如'嘿嘿'。设为空字符串取消口头禅", required = false)
+    )
+
+    override suspend fun execute(args: Map<String, Any?>): String {
+        val cfg = config()
+        val changes = mutableListOf<String>()
+
+        (args["name"] as? String)?.trim()?.takeIf { it.isNotBlank() }?.let {
+            cfg.assistantName = it
+            changes.add("名字改为「$it」")
+        }
+        (args["tone"] as? String)?.trim()?.takeIf { it.isNotBlank() }?.let {
+            if (it in listOf("friendly", "professional", "funny", "concise")) {
+                cfg.tone = it
+                val toneName = mapOf(
+                    "friendly" to "友好", "professional" to "专业",
+                    "funny" to "幽默", "concise" to "简洁"
+                )[it] ?: it
+                changes.add("语气改为「$toneName」")
+            }
+        }
+        args["catchphrase"]?.toString()?.trim()?.let {
+            cfg.catchphrase = it
+            if (it.isBlank()) changes.add("口头禅已取消")
+            else changes.add("口头禅改为「$it」")
+        }
+
+        return if (changes.isEmpty()) "没有需要修改的内容。可用选项：name, tone, catchphrase"
+        else "✅ " + changes.joinToString("，")
     }
 }
