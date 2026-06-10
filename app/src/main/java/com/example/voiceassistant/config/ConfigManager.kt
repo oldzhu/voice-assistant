@@ -31,6 +31,7 @@ class ConfigManager(context: Context) {
         private const val KEY_BARGE_IN_MODE = "barge_in_mode"
         private const val KEY_BARGE_IN_KEYWORD = "barge_in_keyword"
         private const val KEY_MCP_SERVERS = "mcp_servers"
+        private const val KEY_VISION_MODEL = "vision_model"
 
         const val BACKEND_CLOUD = "cloud"
         const val BACKEND_LOCAL = "local"
@@ -70,6 +71,15 @@ class ConfigManager(context: Context) {
             return prefs.getString(KEY_MODEL, default) ?: default
         }
         set(value) = prefs.edit().putString(KEY_MODEL, value).apply()
+
+    /** Vision model for image analysis (camera, screen capture).
+     *  Empty = vision disabled, describeImage() will return error guidance. */
+    var visionModel: String
+        get() = prefs.getString(KEY_VISION_MODEL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_VISION_MODEL, value).apply()
+
+    /** Whether vision (image analysis) is configured. */
+    fun isVisionConfigured(): Boolean = visionModel.isNotBlank()
 
     var wakeSensitivity: Float
         get() = prefs.getFloat(KEY_SENSITIVITY, DEFAULT_SENSITIVITY)

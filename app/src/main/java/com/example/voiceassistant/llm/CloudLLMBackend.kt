@@ -22,6 +22,7 @@ class CloudLLMBackend(
     private val apiKey: String,
     private val baseUrl: String = "https://api.deepseek.com",
     private val model: String = "deepseek-chat",
+    private val visionModel: String = "",  // empty = vision disabled
     private val systemPrompt: String = "你是猪头助手，一个友好的中文语音助手。请用简洁、口语化的中文回复。每次回复控制在2-3句话以内，方便语音播报。" +
         "重要：用户的输入来自语音识别，可能对中英混杂词汇（如\"linux内核\"、\"python代码\"、\"api接口\"等）识别不准。请根据上下文自动纠正可能的语音识别错误。"
 ) : LLMBackend {
@@ -216,6 +217,14 @@ class CloudLLMBackend(
      * @return The model's description of the image.
      */
     suspend fun describeImage(prompt: String, imageBase64: String): Result<String> = withContext(Dispatchers.IO) {
+        // If no vision model configured, return clear guidance
+        if (visionModel.isBlank()) {
+            Log.w(TAG, "Vision called but no vision_model configured")
+            return@withContext Result.success(
+                "视觉识别功能未配置。请在设置中添加 vision_model（如 gpt-4o、qwen-vl-max 等支持图片输入的模型）。"
+            )
+        }
+
         try {
             val content = listOf(
                 mapOf("type" to "text", "text" to prompt),
@@ -227,7 +236,7 @@ class CloudLLMBackend(
                 mapOf("role" to "user", "content" to content)
             )
             val body = mapOf(
-                "model" to model,
+                "model" to visionModel,
                 "messages" to messages,
                 "max_tokens" to 300,
                 "temperature" to 0.7

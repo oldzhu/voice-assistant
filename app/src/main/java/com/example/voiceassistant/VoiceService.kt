@@ -455,7 +455,7 @@ class VoiceService : Service(), LifecycleOwner {
         return if (config.backendType == ConfigManager.BACKEND_LOCAL) {
             LocalLLMBackend(config.baseUrl, config.model)
         } else {
-            CloudLLMBackend(config.apiKey, config.baseUrl, config.model)
+            CloudLLMBackend(config.apiKey, config.baseUrl, config.model, config.visionModel)
         }
     }
 

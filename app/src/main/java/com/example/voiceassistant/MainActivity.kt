@@ -287,6 +287,13 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(modelLabel)
 
+        val visionLabel = android.widget.TextView(this).apply {
+            text = "Vision Model: ${cm.visionModel.ifBlank { "未配置（拍照/截屏不可用）" }}"
+            textSize = 14f; setTextColor(0xFF555555.toInt())
+            setPadding(0, 4, 0, 4)
+        }
+        layout.addView(visionLabel)
+
         MaterialAlertDialogBuilder(this)
             .setTitle("设置")
             .setView(layout)
