@@ -205,6 +205,61 @@ class CloudLLMBackend(
     }
 
     // ==================================================================
+    // Vision — describe image
+    // ==================================================================
+
+    /**
+     * Send an image to the vision model for description.
+     *
+     * @param prompt The text prompt (e.g., "Describe this image in Chinese").
+     * @param imageBase64 Base64-encoded JPEG image (without data URI prefix).
+     * @return The model's description of the image.
+     */
+    suspend fun describeImage(prompt: String, imageBase64: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val content = listOf(
+                mapOf("type" to "text", "text" to prompt),
+                mapOf("type" to "image_url", "image_url" to mapOf(
+                    "url" to "data:image/jpeg;base64,$imageBase64"
+                ))
+            )
+            val messages = listOf(
+                mapOf("role" to "user", "content" to content)
+            )
+            val body = mapOf(
+                "model" to model,
+                "messages" to messages,
+                "max_tokens" to 300,
+                "temperature" to 0.7
+            )
+            val jsonBody = gson.toJson(body)
+
+            val request = Request.Builder()
+                .url("$baseUrl/v1/chat/completions")
+                .addHeader("Authorization", "Bearer $apiKey")
+                .addHeader("Content-Type", "application/json")
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            val response = client.newCall(request).execute()
+            val respBody = response.body?.string() ?: ""
+
+            if (!response.isSuccessful) {
+                Log.e(TAG, "Vision API error: ${response.code} — $respBody")
+                return@withContext Result.failure(Exception("Vision API error ${response.code}"))
+            }
+
+            val chatResponse = gson.fromJson(respBody, ChatResponse::class.java)
+            val description = chatResponse.choices?.firstOrNull()?.message?.content ?: "无法识别图片内容"
+            Log.i(TAG, "Vision response: ${description.take(100)}...")
+            Result.success(description.trim())
+        } catch (e: Exception) {
+            Log.e(TAG, "Vision failed", e)
+            Result.failure(e)
+        }
+    }
+
+    // ==================================================================
     // Message construction
     // ==================================================================
 

@@ -48,6 +48,8 @@ import com.example.voiceassistant.tools.ListRemindersTool
 import com.example.voiceassistant.tools.SearchMediaTool
 import com.example.voiceassistant.tools.PlayMediaTool
 import com.example.voiceassistant.tools.SwarmTool
+import com.example.voiceassistant.tools.DescribeImageTool
+import com.example.voiceassistant.tools.ScreenCaptureTool
 import com.example.voiceassistant.skill.SkillRegistry
 import com.example.voiceassistant.skill.SkillExecutor
 import com.example.voiceassistant.skill.builtin.MorningRoutineSkill
@@ -336,6 +338,16 @@ class VoiceService : Service(), LifecycleOwner {
                 register(PlayMediaTool({ this@VoiceService }))
                 // Swarm: parallel LLM queries
                 register(SwarmTool({ getBackendForDynamicTool() }))
+                // Vision: photo description
+                register(DescribeImageTool(
+                    { this@VoiceService },
+                    { llmBackend as? CloudLLMBackend }
+                ))
+                // Vision: screen capture + OCR
+                register(ScreenCaptureTool(
+                    { this@VoiceService },
+                    { llmBackend as? CloudLLMBackend }
+                ))
             }
             // L3: restore previously-generated tools (after toolRegistry is assigned)
             createTool.restoreFromDisk()

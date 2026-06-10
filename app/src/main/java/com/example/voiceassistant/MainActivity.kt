@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.voiceassistant.config.ConfigManager
 import com.example.voiceassistant.databinding.ActivityMainBinding
+import com.example.voiceassistant.tools.ScreenCaptureManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.File
 
@@ -69,11 +70,24 @@ class MainActivity : AppCompatActivity() {
         else Toast.makeText(this, "需要录音权限", Toast.LENGTH_LONG).show()
     }
 
+    private val screenCaptureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        ScreenCaptureManager.onActivityResult(result.resultCode, result.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         configManager = ConfigManager(this)
+
+        // Register for screen capture
+        ScreenCaptureManager.activity = this
+        ScreenCaptureManager.launchIntent = { intent ->
+            screenCaptureLauncher.launch(intent)
+        }
+
         setupUI()
         checkPermissionsAndStart()
     }

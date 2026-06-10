@@ -169,6 +169,10 @@ class ToolCallEngine(
         append("重要：如果用户请求需要多步骤操作，可以调用 skill_ 开头的技能工具。技能会自动完成所有步骤并报告进度，你只需要等待最终结果。")
         append("当用户需要对比、同时查询多个独立信息时（如「对比两个城市的天气」「查科技和体育新闻」），" +
             "使用 swarm_query 工具并行查询。用 ||| 分隔每个子查询，每个子查询要求简短回答（不超过30字）。")
+        append("当用户说「看看这是什么」「拍张照」「描述一下」「我面前是什么」等要求识别眼前事物时，" +
+            "调用 describe_photo 工具拍照并用视觉AI描述。")
+        append("当用户说「截屏」「识别屏幕」「屏幕上的文字」「read the screen」等要求理解屏幕内容时，" +
+            "调用 capture_screen 工具截取屏幕并用视觉AI提取文字和描述。第一次使用会弹出权限对话框。")
 
         // Self-improvement: L2 — configuration
         append("你可以通过 update_config 工具记住用户偏好。")
