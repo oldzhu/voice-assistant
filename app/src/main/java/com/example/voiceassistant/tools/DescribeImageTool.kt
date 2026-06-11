@@ -7,29 +7,26 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.FileProvider
-import com.example.voiceassistant.llm.CloudLLMBackend
 import com.example.voiceassistant.llm.Tool
 import com.example.voiceassistant.llm.ToolParameter
+import com.example.voiceassistant.llm.VisionProvider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
- * Tool: describe_photo — take a photo and describe it via vision LLM.
+ * Tool: describe_photo — take a photo and describe it via VisionProvider.
  *
  * Flow:
  * 1. Launch camera intent to capture a photo
  * 2. Wait for the photo file to be written by the camera app
  * 3. Read the image, convert to base64
- * 4. Send to DeepSeek vision model via CloudLLMBackend.describeImage()
+ * 4. Send to VisionProvider (remote cloud VLM or local Tesseract OCR)
  * 5. Return the description as TTS-ready text
- *
- * The camera is launched via startActivity from the service context.
- * The tool polls for the file to appear after the camera app saves it.
  */
 class DescribeImageTool(
     private val context: () -> Context,
-    private val llmBackend: () -> CloudLLMBackend?
+    private val visionProvider: () -> VisionProvider?
 ) : Tool {
     override val name = "describe_photo"
     override val description = "拍照并用视觉AI描述照片内容。当用户说「看看这是什么」「描述一下」「拍张照看看」「我面前是什么」时调用。"
@@ -49,7 +46,7 @@ class DescribeImageTool(
             ?: "用中文简洁描述这张图片的内容，2-3句话即可"
 
         val ctx = context()
-        val backend = llmBackend() ?: return "错误：LLM 后端未初始化"
+        val provider = visionProvider() ?: return "错误：视觉模块未初始化"
 
         // 1. Create temp file for the photo
         val photoDir = File(ctx.filesDir, "photos").also { it.mkdirs() }
@@ -73,14 +70,13 @@ class DescribeImageTool(
             return "错误：无法启动相机：${e.message}"
         }
 
-        // 3. Wait for photo file to be written (camera app saves to our URI)
+        // 3. Wait for photo file to be written
         val fileReady = withTimeoutOrNull(PHOTO_TIMEOUT_MS) {
             while (!photoFile.exists() || photoFile.length() == 0L) {
                 delay(500)
                 Log.d(TAG, "Waiting for photo... exists=${photoFile.exists()} size=${photoFile.length()}")
             }
-            // Small extra wait for the camera to finish writing
-            delay(1000)
+            delay(1000)  // let camera finish writing
             true
         }
 
@@ -102,14 +98,13 @@ class DescribeImageTool(
 
         Log.i(TAG, "Image base64: ${base64.length} chars (${"%.1f".format(base64.length / 1024.0)}KB)")
 
-        // 5. Send to vision API
+        // 5. Send to VisionProvider
         return try {
-            val result = backend.describeImage(prompt, base64)
+            val result = provider.describe(prompt, base64)
             result.getOrElse { ex -> "图片识别失败：${ex.message}" }
         } catch (e: Exception) {
             "图片识别出错：${e.message}"
         } finally {
-            // Clean up temp photo (not critical)
             try { photoFile.delete() } catch (_: Exception) {}
         }
     }

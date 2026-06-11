@@ -68,4 +68,10 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+
+    // Tesseract OCR for local vision (Chinese + English)
+    // Via JitPack: https://github.com/adaptech-cz/Tesseract4Android
+    implementation("com.github.adaptech-cz:Tesseract4Android:4.9.0") {
+        exclude(group = "com.github.adaptech-cz.Tesseract4Android", module = "tesseract4android-openmp")
+    }
 }

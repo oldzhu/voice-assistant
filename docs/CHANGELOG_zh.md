@@ -19,6 +19,27 @@
 - **文档**：`docs/SKILL_SYSTEM_zh.md` + `docs/SKILL_SYSTEM_en.md`
 - **路线图**：已更新 — v5–v9 标记为已完成，新增 A–D 选项供讨论
 
+## [v1.9] — 2026-06-11
+
+### 新增
+- **VisionProvider 架构**：抽象接口 + 双后端
+  - `LocalVisionProvider`：Tesseract 4 OCR（`chi_sim+eng`，47 MB 内置），零云端隐私
+  - `RemoteVisionProvider`：OpenAI 兼容 VLM，完整图片理解
+  - 运行时配置：`vision_provider`（本地/远程/自动）、`vision_model`、`vision_api_key`、`vision_base_url`
+  - 凭证回退：`vision_api_key`/`vision_base_url` 为空时自动使用主 LLM 凭证
+- **无障碍静默截屏**（Android 11+）：通过无障碍服务 `takeScreenshot()` — 零权限弹窗
+  - 无障碍服务未开启时回退到 MediaProjection
+- **设置页面重设计**：LLM 设置可编辑（API Key、Base URL、Model）+ 独立的视觉设置区段
+  - 视觉 provider 三选一（本地/云端/自动）、Vision API Key、Vision URL、Vision Model — 均可点击编辑
+
+### 变更
+- `SettingsDialog`：只读标签改为可点击行；添加 ScrollView 支持长内容
+- `SelfImprovementTools.update_config`：支持 `vision_api_key` 和 `vision_base_url` 键
+- `VoiceService.createVisionProvider()`：使用 `effectiveVisionApiKey()`/`effectiveVisionBaseUrl()` 带回退逻辑
+
+### 文档
+- `docs/VISION_DESIGN_zh.md` + `docs/VISION_DESIGN_en.md`
+
 ## [v1.8] — 2026-06-10
 
 ### 新增

@@ -26,6 +26,9 @@ import com.example.voiceassistant.llm.LLMBackend
 import com.example.voiceassistant.llm.LocalLLMBackend
 import com.example.voiceassistant.llm.ToolRegistry
 import com.example.voiceassistant.llm.ToolCallEngine
+import com.example.voiceassistant.llm.VisionProvider
+import com.example.voiceassistant.llm.RemoteVisionProvider
+import com.example.voiceassistant.llm.LocalVisionProvider
 import com.example.voiceassistant.tools.SetSpeechRateTool
 import com.example.voiceassistant.tools.StopListeningTool
 import com.example.voiceassistant.tools.StartListeningTool
@@ -113,6 +116,7 @@ class VoiceService : Service(), LifecycleOwner {
     private var sysTtsEngine: SystemTtsEngine? = null
     private var useSystemTts = false
     private var llmBackend: LLMBackend? = null
+    private var visionProvider: VisionProvider? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
@@ -280,6 +284,11 @@ class VoiceService : Service(), LifecycleOwner {
         llmBackend = createLLMBackend()
         debugLog("LLM backend ready")
 
+        // Init vision provider (local OCR or remote VLM, based on config)
+        val cfg = ConfigManager(this)
+        visionProvider = createVisionProvider(cfg)
+        debugLog("Vision provider ready: ${cfg.visionProvider}")
+
         // Init memory system (before tools — RememberTool/RecallTool need it)
         memoryManager = MemoryManager(File(filesDir, "assistant_memory.json"))
         memoryManager.load()
@@ -341,12 +350,12 @@ class VoiceService : Service(), LifecycleOwner {
                 // Vision: photo description
                 register(DescribeImageTool(
                     { this@VoiceService },
-                    { llmBackend as? CloudLLMBackend }
+                    { visionProvider }
                 ))
                 // Vision: screen capture + OCR
                 register(ScreenCaptureTool(
                     { this@VoiceService },
-                    { llmBackend as? CloudLLMBackend }
+                    { visionProvider }
                 ))
             }
             // L3: restore previously-generated tools (after toolRegistry is assigned)
@@ -456,6 +465,31 @@ class VoiceService : Service(), LifecycleOwner {
             LocalLLMBackend(config.baseUrl, config.model)
         } else {
             CloudLLMBackend(config.apiKey, config.baseUrl, config.model, config.visionModel)
+        }
+    }
+
+    /** Create the VisionProvider based on vision_provider config. */
+    private fun createVisionProvider(config: ConfigManager): VisionProvider {
+        return when (config.visionProvider) {
+            ConfigManager.VISION_REMOTE -> {
+                RemoteVisionProvider(
+                    config.effectiveVisionApiKey(),
+                    config.effectiveVisionBaseUrl(),
+                    config.visionModel
+                )
+            }
+            ConfigManager.VISION_LOCAL -> {
+                LocalVisionProvider(this) { llmBackend }
+            }
+            ConfigManager.VISION_AUTO -> {
+                // Auto: try local first (always available), fallback info in system prompt
+                LocalVisionProvider(this) { llmBackend }
+            }
+            else -> {
+                // Unknown/empty — default to local
+                debugLog("Unknown vision_provider='${config.visionProvider}', defaulting to local")
+                LocalVisionProvider(this) { llmBackend }
+            }
         }
     }
 

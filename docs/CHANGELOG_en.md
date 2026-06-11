@@ -19,6 +19,27 @@ All notable changes are documented here. Follows [Keep a Changelog](https://keep
 - **Docs**: `docs/SKILL_SYSTEM_zh.md` + `docs/SKILL_SYSTEM_en.md`
 - **ROADMAP**: updated — v5–v9 completed, new options A–D for discussion
 
+## [v1.9] — 2026-06-11
+
+### Added
+- **VisionProvider architecture**: abstract interface with dual backends
+  - `LocalVisionProvider`: Tesseract 4 OCR (`chi_sim+eng`, 47 MB bundled), zero-cloud privacy
+  - `RemoteVisionProvider`: OpenAI-compatible VLM for full image understanding
+  - Runtime config: `vision_provider` (local/remote/auto), `vision_model`, `vision_api_key`, `vision_base_url`
+  - Credential fallback: `vision_api_key`/`vision_base_url` fall back to main LLM credentials when blank
+- **Accessibility-based silent screenshot** (Android 11+): `takeScreenshot()` via AccessibilityService — zero permission popups
+  - Falls back to MediaProjection when AccessibilityService not enabled
+- **Settings page redesign**: editable LLM settings (API Key, Base URL, Model) + dedicated Vision settings section
+  - Vision provider radio (本地/云端/自动), Vision API Key, Vision URL, Vision Model — all click-to-edit
+
+### Changed
+- `SettingsDialog`: replaced read-only labels with clickable rows; added ScrollView for long content
+- `SelfImprovementTools.update_config`: now supports `vision_api_key` and `vision_base_url` keys
+- `VoiceService.createVisionProvider()`: uses `effectiveVisionApiKey()`/`effectiveVisionBaseUrl()` with LLM fallback
+
+### Docs
+- `docs/VISION_DESIGN_zh.md` + `docs/VISION_DESIGN_en.md`
+
 ## [v1.8] — 2026-06-10
 
 ### Added

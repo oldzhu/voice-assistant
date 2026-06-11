@@ -113,10 +113,14 @@ object ScreenCaptureManager {
                 as MediaProjectionManager
             val projection = mgr.getMediaProjection(resultCode, data)
 
-            val bitmap = captureScreen(act, projection)
-            projection.stop()
-            deferred.complete(bitmap)
-            Log.i(TAG, "Screen captured: ${bitmap?.width}x${bitmap?.height}")
+            // Delay 3 seconds to let user switch back to their target app
+            Log.i(TAG, "Permission granted — waiting 3s for user to switch back...")
+            Handler(Looper.getMainLooper()).postDelayed({
+                val bitmap = captureScreen(act, projection)
+                projection.stop()
+                deferred.complete(bitmap)
+                Log.i(TAG, "Screen captured: ${bitmap?.width}x${bitmap?.height}")
+            }, 3000L)
         } catch (e: Exception) {
             Log.e(TAG, "Screen capture failed", e)
             deferred.complete(null)

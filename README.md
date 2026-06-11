@@ -38,7 +38,7 @@
 | Stage | Tech | Notes |
 |-------|------|-------|
 | **ASR** (Speech → Text) | Sherpa-ONNX Paraformer bilingual zh-en | Streaming, int8 quantized, 227MB |
-| **LLM** (Text → Reply) | DeepSeek v4-flash via API | Tool-calling with 22 tools |
+| **LLM** (Text → Reply) | DeepSeek v4-flash via API | Tool-calling with 22 tools, vision: local OCR (Tesseract) + remote VLM |
 | **TTS** (Reply → Speech) | System TTS (com.yuemeng.speechsuite) | 275 voices, local, ~1s init |
 | **VAD** | Silero VAD ONNX | Prevents silent mic noise from triggering ASR |
 
@@ -149,6 +149,7 @@ voice-assistant/
 │   ├── CHANGELOG_zh.md / CHANGELOG_en.md
 │   ├── TTS_SANITIZER_DESIGN_zh.md / TTS_SANITIZER_DESIGN_en.md
 │   ├── SKILL_SYSTEM_zh.md / SKILL_SYSTEM_en.md
+│   ├── VISION_DESIGN_zh.md / VISION_DESIGN_en.md
 │   ├── SELF_IMPROVEMENT.md
 │   └── plans/                       # Design proposals
 └── app/build/outputs/apk/debug/

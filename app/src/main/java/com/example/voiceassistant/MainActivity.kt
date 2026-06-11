@@ -182,22 +182,62 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         val cm = configManager ?: return
 
-        // Build custom dialog with seekbar for speech rate
-        val layout = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(48, 24, 48, 16)
+        // ---- Helper: make a clickable settings row ----
+        fun makeRow(label: String, value: String, onClick: () -> Unit): android.widget.LinearLayout {
+            return android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                setPadding(0, 2, 0, 2)
+                addView(android.widget.TextView(this@MainActivity).apply {
+                    text = "$label  "
+                    textSize = 14f; setTextColor(0xFF555555.toInt())
+                })
+                addView(android.widget.TextView(this@MainActivity).apply {
+                    text = value; textSize = 14f
+                    setTextColor(0xFF333333.toInt())
+                    isClickable = true; isFocusable = true
+                    setOnClickListener { onClick() }
+                })
+            }
         }
 
+        // ---- Helper: section divider ----
+        fun makeDivider(): android.view.View = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 2
+            ).apply { topMargin = 8; bottomMargin = 6 }
+            setBackgroundColor(0x22000000)
+        }
+
+        // ---- Helper: section title ----
+        fun makeSectionTitle(text: String): android.widget.TextView =
+            android.widget.TextView(this).apply {
+                this.text = text; textSize = 15f
+                setTextColor(0xFF333333.toInt())
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(0, 12, 0, 4)
+            }
+
+        val root = android.widget.ScrollView(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, 600.dpToPx()
+            )
+        }
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 16)
+        }
+        root.addView(layout)
+
+        // ── Speech rate ──────────────────────────────────
         val rateLabel = android.widget.TextView(this).apply {
             text = "语速: ${String.format("%.1f", cm.speechRate)}x"
-            textSize = 16f
-            setTextColor(0xFF333333.toInt())
-            setPadding(0, 0, 0, 8)
+            textSize = 16f; setTextColor(0xFF333333.toInt())
+            setPadding(0, 0, 0, 4)
         }
         layout.addView(rateLabel)
 
         val seekBar = android.widget.SeekBar(this).apply {
-            max = 20  // 0.5 to 2.5, in 0.1 steps: (2.5-0.5)*10 = 20
+            max = 20
             progress = ((cm.speechRate - 0.5f) * 10).toInt()
             setPadding(0, 0, 0, 8)
             setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
@@ -211,30 +251,24 @@ class MainActivity : AppCompatActivity() {
             })
         }
         layout.addView(seekBar)
+        layout.addView(makeDivider())
 
-        // Divider
-        layout.addView(android.view.View(this).apply {
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 1
-            ).apply { topMargin = 8; bottomMargin = 8 }
-            setBackgroundColor(0x33000000)
-        })
-
-        // Barge-in mode label
+        // ── Barge-in mode ────────────────────────────────
         val bargeLabel = android.widget.TextView(this).apply {
             text = "打断模式" + when (cm.bargeInMode) {
                 "on" -> "：允许打断"
                 "keyword" -> "：关键词打断"
                 else -> "：不打断"
             }
-            textSize = 16f; setTextColor(0xFF333333.toInt())
-            setPadding(0, 0, 0, 8)
+            textSize = 15f; setTextColor(0xFF333333.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 4, 0, 4)
         }
         layout.addView(bargeLabel)
 
         val bargeGroup = android.widget.RadioGroup(this).apply {
             orientation = android.widget.RadioGroup.HORIZONTAL
-            setPadding(0, 0, 0, 8)
+            setPadding(0, 0, 0, 4)
         }
         for ((mode, label) in listOf("off" to "不打断", "on" to "允许打断", "keyword" to "关键词")) {
             bargeGroup.addView(android.widget.RadioButton(this).apply {
@@ -257,49 +291,99 @@ class MainActivity : AppCompatActivity() {
             voiceService?.setBargeInMode(mode)
         }
         layout.addView(bargeGroup)
+        layout.addView(makeDivider())
 
-        // Divider
-        layout.addView(android.view.View(this).apply {
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 1
-            ).apply { topMargin = 8; bottomMargin = 8 }
-            setBackgroundColor(0x33000000)
+        // ── LLM Settings ─────────────────────────────────
+        layout.addView(makeSectionTitle("🤖 LLM 设置"))
+
+        layout.addView(makeRow("API Key：",
+            if (cm.apiKey.isNotBlank()) "****${cm.apiKey.takeLast(4)}" else "未设置"
+        ) {
+            showInputDialog("API Key", cm.apiKey) { cm.apiKey = it }
         })
 
-        val apiLabel = android.widget.TextView(this).apply {
-            text = "API Key: ${if (cm.apiKey.isNotBlank()) "****${cm.apiKey.takeLast(4)}" else "未设置"}"
-            textSize = 14f; setTextColor(0xFF555555.toInt())
-            setPadding(0, 4, 0, 4)
-        }
-        layout.addView(apiLabel)
+        layout.addView(makeRow("Base URL：", cm.baseUrl) {
+            showInputDialog("Base URL", cm.baseUrl) { cm.baseUrl = it }
+        })
 
-        val urlLabel = android.widget.TextView(this).apply {
-            text = "Base URL: ${cm.baseUrl}"
-            textSize = 14f; setTextColor(0xFF555555.toInt())
-            setPadding(0, 4, 0, 4)
-        }
-        layout.addView(urlLabel)
+        layout.addView(makeRow("Model：", cm.model) {
+            showInputDialog("Model", cm.model) { cm.model = it }
+        })
 
-        val modelLabel = android.widget.TextView(this).apply {
-            text = "Model: ${cm.model}"
-            textSize = 14f; setTextColor(0xFF555555.toInt())
-            setPadding(0, 4, 0, 4)
-        }
-        layout.addView(modelLabel)
+        layout.addView(makeDivider())
 
-        val visionLabel = android.widget.TextView(this).apply {
-            text = "Vision Model: ${cm.visionModel.ifBlank { "未配置（拍照/截屏不可用）" }}"
+        // ── Vision Settings ──────────────────────────────
+        layout.addView(makeSectionTitle("👁 视觉设置"))
+
+        // Vision provider radio
+        val visProviderLabel = android.widget.TextView(this).apply {
+            text = "识别方式：" + when (cm.visionProvider) {
+                ConfigManager.VISION_REMOTE -> "云端"
+                ConfigManager.VISION_AUTO -> "自动"
+                else -> "本地 OCR"
+            }
             textSize = 14f; setTextColor(0xFF555555.toInt())
             setPadding(0, 4, 0, 4)
         }
-        layout.addView(visionLabel)
+        layout.addView(visProviderLabel)
+
+        val visProviderGroup = android.widget.RadioGroup(this).apply {
+            orientation = android.widget.RadioGroup.HORIZONTAL
+            setPadding(0, 0, 0, 4)
+        }
+        for ((mode, label) in listOf(
+            ConfigManager.VISION_LOCAL to "本地",
+            ConfigManager.VISION_REMOTE to "云端",
+            ConfigManager.VISION_AUTO to "自动"
+        )) {
+            visProviderGroup.addView(android.widget.RadioButton(this).apply {
+                text = label; id = mode.hashCode()
+                isChecked = cm.visionProvider == mode
+                textSize = 13f
+            })
+        }
+        visProviderGroup.setOnCheckedChangeListener { _, id ->
+            val mode = when (id) {
+                ConfigManager.VISION_REMOTE.hashCode() -> ConfigManager.VISION_REMOTE
+                ConfigManager.VISION_AUTO.hashCode() -> ConfigManager.VISION_AUTO
+                else -> ConfigManager.VISION_LOCAL
+            }
+            cm.visionProvider = mode
+            visProviderLabel.text = "识别方式：" + when (mode) {
+                ConfigManager.VISION_REMOTE -> "云端"
+                ConfigManager.VISION_AUTO -> "自动"
+                else -> "本地 OCR"
+            }
+        }
+        layout.addView(visProviderGroup)
+
+        layout.addView(makeRow("Vision API Key：",
+            if (cm.visionApiKey.isNotBlank()) "****${cm.visionApiKey.takeLast(4)}" else "同 LLM Key"
+        ) {
+            showInputDialog("Vision API Key", cm.visionApiKey) { cm.visionApiKey = it }
+        })
+
+        layout.addView(makeRow("Vision URL：",
+            cm.visionBaseUrl.ifBlank { "同 LLM URL" }
+        ) {
+            showInputDialog("Vision Base URL", cm.visionBaseUrl) { cm.visionBaseUrl = it }
+        })
+
+        layout.addView(makeRow("Vision Model：",
+            cm.visionModel.ifBlank { "未配置" }
+        ) {
+            showInputDialog("Vision Model", cm.visionModel) { cm.visionModel = it }
+        })
 
         MaterialAlertDialogBuilder(this)
             .setTitle("设置")
-            .setView(layout)
+            .setView(root)
             .setNegativeButton("关闭", null)
             .show()
     }
+
+    private fun Int.dpToPx(): Int =
+        (this * resources.displayMetrics.density).toInt()
 
     private fun showInputDialog(title: String, value: String, onSave: (String) -> Unit) {
         val input = android.widget.EditText(this).apply { setText(value); setSingleLine() }

@@ -17,4 +17,5 @@
     <string name="notification_channel">猪头助手</string>
     <string name="notification_listening">正在后台监听唤醒词…</string>
     <string name="sample_text">你好！我是猪头助手。打开后直接对我说话就行。</string>
+    <string name="accessibility_service_description">猪头助手屏幕截取服务 — 用于静默截取当前屏幕内容。不收集任何个人数据。</string>
 </resources>

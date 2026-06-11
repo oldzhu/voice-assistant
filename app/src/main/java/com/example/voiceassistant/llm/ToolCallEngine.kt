@@ -136,10 +136,8 @@ class ToolCallEngine(
                 ))
             }
 
-            // If any tool hit a timeout, break the loop
-            if (toolOutputs.any { it.second.contains("超时") }) {
-                return Result.success("网络不太好，搜索超时了，请稍后再试")
-            }
+            // If any tool hit an error, continue the loop — let LLM process the result
+            // DO NOT auto-break on timeout keywords — the LLM should decide the next step
         }
 
         // Max turns exceeded — give a graceful fallback
@@ -157,6 +155,14 @@ class ToolCallEngine(
         append("你是猪头助手，一个友好的中文语音助手。")
         append("你可以调用工具来执行操作（调整设置、搜索信息、获取天气、新闻、位置，以及记忆和配置管理等）。")
         append("当用户要求执行某个操作时，请直接调用对应的工具函数，不要用文字描述你将要做什么。")
+
+        // ═══════════════════════════════════════════════════════════════
+        // KEYWORD ROUTING PRIORITY — must come BEFORE general tool guidance
+        // ═══════════════════════════════════════════════════════════════
+        append("【关键词路由 - 最高优先级】以下任一关键词出现时，用户想的是「识别手机当前屏幕」，NOT 搜索互联网：")
+        append("「这一页」「当前页面」「正在看的」「屏幕上的」「截屏」「帮我看看这页」「总结这页」「提取这页」「这页在说什么」")
+        append("看到这些词 → 立即调用 capture_screen，绝对不要调用 web_search、web_fetch 或任何搜索工具！")
+
         append("工具执行完毕后，用口语化的中文简短总结结果，控制在2-3句话以内。")
         append("如果用户只是聊天而不是要求操作，正常回复即可，不要调用工具。")
         append("重要：用户的输入来自语音识别，可能对中英混杂词汇识别不准，请根据上下文自动纠正。")
@@ -171,8 +177,14 @@ class ToolCallEngine(
             "使用 swarm_query 工具并行查询。用 ||| 分隔每个子查询，每个子查询要求简短回答（不超过30字）。")
         append("当用户说「看看这是什么」「拍张照」「描述一下」「我面前是什么」等要求识别眼前事物时，" +
             "调用 describe_photo 工具拍照并用视觉AI描述。")
-        append("当用户说「截屏」「识别屏幕」「屏幕上的文字」「read the screen」等要求理解屏幕内容时，" +
-            "调用 capture_screen 工具截取屏幕并用视觉AI提取文字和描述。第一次使用会弹出权限对话框。")
+
+        // CRITICAL: Screen capture for browsing scenario — takes priority over web_search
+        append("【重要规则】当用户提到「这一页」「当前页面」「正在看的」「屏幕上的」「帮我看看这页」「总结这页」「提取这页的文字」" +
+            "「这页在说什么」「帮我读一下这页」「识别屏幕」「截屏」时，用户指的是「手机当前屏幕上显示的内容」（可能正在用浏览器、微信、新闻app等），" +
+            "必须调用 capture_screen 工具截取屏幕来识别。绝对不要调用 web_search 或 web_fetch！这是截屏场景，不是网页搜索。")
+        append("capture_screen 的 mode 参数：用户说「总结」「描述」时用 describe，" +
+            "说「提取文字」「文字」时用 text，说「看看」「看一下」时用 full。" +
+            "第一次使用会弹出系统「录制或投放」权限框，需选择「整个屏幕」并点「立即开始」。授权后有3秒倒计时让用户切回目标app。")
 
         // Self-improvement: L2 — configuration
         append("你可以通过 update_config 工具记住用户偏好。")

@@ -32,9 +32,17 @@ class ConfigManager(context: Context) {
         private const val KEY_BARGE_IN_KEYWORD = "barge_in_keyword"
         private const val KEY_MCP_SERVERS = "mcp_servers"
         private const val KEY_VISION_MODEL = "vision_model"
+        private const val KEY_VISION_PROVIDER = "vision_provider"
+        private const val KEY_VISION_API_KEY = "vision_api_key"
+        private const val KEY_VISION_BASE_URL = "vision_base_url"
 
         const val BACKEND_CLOUD = "cloud"
         const val BACKEND_LOCAL = "local"
+
+        // Vision provider modes
+        const val VISION_REMOTE = "remote"
+        const val VISION_LOCAL = "local"
+        const val VISION_AUTO = "auto"
 
         const val DEFAULT_CLOUD_URL = "https://api.deepseek.com"
         const val DEFAULT_CLOUD_MODEL = "deepseek-chat"
@@ -78,8 +86,35 @@ class ConfigManager(context: Context) {
         get() = prefs.getString(KEY_VISION_MODEL, "") ?: ""
         set(value) = prefs.edit().putString(KEY_VISION_MODEL, value).apply()
 
+    /** Vision provider: "remote" (cloud VLM), "local" (Tesseract OCR), "auto" (smart choice). */
+    var visionProvider: String
+        get() = prefs.getString(KEY_VISION_PROVIDER, VISION_LOCAL) ?: VISION_LOCAL
+        set(value) = prefs.edit().putString(KEY_VISION_PROVIDER, value).apply()
+
+    /** Dedicated vision API key. Falls back to main apiKey when blank. */
+    var visionApiKey: String
+        get() = prefs.getString(KEY_VISION_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_VISION_API_KEY, value).apply()
+
+    /** Dedicated vision base URL. Falls back to main baseUrl when blank. */
+    var visionBaseUrl: String
+        get() = prefs.getString(KEY_VISION_BASE_URL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_VISION_BASE_URL, value).apply()
+
+    /** Effective vision API key: dedicated if set, else main LLM key. */
+    fun effectiveVisionApiKey(): String = visionApiKey.ifBlank { apiKey }
+
+    /** Effective vision base URL: dedicated if set, else main LLM URL. */
+    fun effectiveVisionBaseUrl(): String = visionBaseUrl.ifBlank { baseUrl }
+
     /** Whether vision (image analysis) is configured. */
-    fun isVisionConfigured(): Boolean = visionModel.isNotBlank()
+    fun isVisionConfigured(): Boolean {
+        return when (visionProvider) {
+            VISION_LOCAL -> true  // local always available (bundled traineddata)
+            VISION_AUTO -> true   // auto tries local first
+            else -> visionModel.isNotBlank()  // remote needs model
+        }
+    }
 
     var wakeSensitivity: Float
         get() = prefs.getFloat(KEY_SENSITIVITY, DEFAULT_SENSITIVITY)

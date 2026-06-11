@@ -26,12 +26,15 @@ import java.io.File
 class UpdateConfigTool(private val config: () -> ConfigManager) : Tool {
     override val name = "update_config"
     override val description = "修改助理的配置或记忆用户偏好。如用户说'以后回答简短点'就设 response_style=concise，" +
-        "用户说'我住在XX'就设 user_city=XX。特殊键：vision_model（视觉识别模型，如 gpt-4o、qwen-vl-max）。" +
-        "常用键：response_style, default_news_category, user_city, user_name, vision_model。"
+        "用户说'我住在XX'就设 user_city=XX。特殊键：vision_model（视觉识别模型，如 gpt-4o、qwen-vl-max）、" +
+        "vision_provider（视觉提供者：remote云端识别/local本地OCR/auto自动选择）、" +
+        "vision_api_key（视觉API密钥，用于不同于主LLM的视觉接口）、" +
+        "vision_base_url（视觉API地址）。" +
+        "常用键：response_style, default_news_category, user_city, user_name, vision_model, vision_provider, vision_api_key, vision_base_url。"
 
     override val parameters = mapOf(
-        "key" to ToolParameter("string", "配置项名称，如 response_style、user_city、vision_model"),
-        "value" to ToolParameter("string", "配置值，如 concise、深圳、gpt-4o")
+        "key" to ToolParameter("string", "配置项名称，如 response_style、user_city、vision_model、vision_provider"),
+        "value" to ToolParameter("string", "配置值，如 concise、深圳、gpt-4o、local")
     )
 
     override suspend fun execute(args: Map<String, Any?>): String {
@@ -42,6 +45,9 @@ class UpdateConfigTool(private val config: () -> ConfigManager) : Tool {
         // Special keys that map to dedicated ConfigManager properties
         when (key.trim()) {
             "vision_model" -> config().visionModel = value.trim()
+            "vision_provider" -> config().visionProvider = value.trim()
+            "vision_api_key" -> config().visionApiKey = value.trim()
+            "vision_base_url" -> config().visionBaseUrl = value.trim()
             else -> config().setUserPreference(key.trim(), value.trim())
         }
         return "已更新：$key = $value"
