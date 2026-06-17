@@ -120,3 +120,56 @@
 **根因：** 无障碍服务 XML 标志位变化时，Android 要求重新开启。
 
 **临时方案：** 用户在 设置 → 辅助功能 → 猪头助手 中手动关闭再打开。
+
+---
+
+## 实施阶段（已完成）
+
+| 阶段 | 内容 | 涉及文件 |
+|---|---|---|
+| **A: 升级无障碍服务** | XML 中开启手势 + 窗口内容，扩展服务类 | `accessibility_service_config.xml`, `ScreenCaptureAccessibilityService.kt` |
+| **B: 手势管理器** | 桥接层：工具 → 无障碍服务（点击、滑动、输入） | 新增：`GestureManager.kt` |
+| **C: 工具（7 个新增）** | `launch_app`, `tap_screen`, `type_text`, `swipe_screen`, `press_key`, `get_screen_elements`, `wait_for_element` | 新增：`AppControlTools.kt`, `ScreenInteractionTools.kt`, `ScreenElementTools.kt` |
+| **D: 系统提示词** | 教 LLM 应用操控流程 + 敏感操作规则 | `ToolCallEngine.kt` (buildSystemPrompt) |
+| **E: 注册工具** | 接入 VoiceService | `VoiceService.kt` |
+| **F: 构建 → 部署 → 测试** | ADB 部署到 Realme，逐工具测试 | 终端 |
+
+---
+
+## 敏感操作分级
+
+| 操作类型 | 策略 |
+|---|---|
+| 🟢 打开/阅读/滚动/搜索 | 自动执行 |
+| 🟡 输入文字、点击按钮 | 上下文内自动执行 |
+| 🔴 支付、提交订单、转账 | **必须确认** |
+
+---
+
+## 端到端流程示例
+
+```
+用户："打开京东搜机械键盘"
+  ↓
+LLM → launch_app(app="京东")         → "京东已打开"
+LLM → wait_for_element(text="搜索")  → "搜索框已出现"
+LLM → tap_screen(text="搜索")        → "已点击搜索框"
+LLM → type_text(text="机械键盘")     → "已输入"
+LLM → press_key(key="enter")         → "已搜索"
+LLM → get_screen_elements()          → [商品列表各个item的坐标和文字]
+LLM → capture_screen(mode="describe") → "页面显示了12个机械键盘商品，价格从89到399..."
+  ↓
+TTS: "京东上搜到12款机械键盘，价格从89到399不等。第一款是..."
+```
+
+---
+
+## 风险评估
+
+| 风险 | 缓解措施 |
+|---|---|
+| 无障碍服务配置变更需要用户重新开启 | 弹出提示引导用户重新开启 |
+| UI 树过大导致 LLM 上下文溢出 | `get_screen_elements` 只返回可交互元素，上限 30 条 |
+| 应用加载太慢，下一步操作过早 | `wait_for_element` 可配置超时（默认 5 秒） |
+| OCR 误读价格 | 优先用无障碍树（精确文本），不用 OCR — `get_screen_elements` 直接返回文字 |
+| LLM 忽略 `launch_app`，试图在桌面点图标 | 系统提示词关键词路由；可考虑应用层预处理（见问题 1） |

@@ -120,3 +120,56 @@ System prompt rule:
 **Root cause:** Android requires re-enabling when service XML flags change.
 
 **Workaround:** User manually toggles in Settings → 辅助功能 → 猪头助手.
+
+---
+
+## Implementation Phases (completed)
+
+| Phase | What | Files |
+|---|---|---|
+| **A: Accessibility Service Upgrade** | Enable gestures + window content in XML + extend service class | `accessibility_service_config.xml`, `ScreenCaptureAccessibilityService.kt` |
+| **B: Gesture Manager** | Bridge class for tap/swipe/type from tools → AccessibilityService | New: `GestureManager.kt` |
+| **C: Tools (7 new)** | `launch_app`, `tap_screen`, `type_text`, `swipe_screen`, `press_key`, `get_screen_elements`, `wait_for_element` | New: `AppControlTools.kt`, `ScreenInteractionTools.kt`, `ScreenElementTools.kt` |
+| **D: System Prompt** | Teach LLM the app control workflow + sensitivity rules | `ToolCallEngine.kt` (buildSystemPrompt) |
+| **E: Register tools** | Wire into VoiceService | `VoiceService.kt` |
+| **F: Build → Deploy → Test** | ADB deploy to Realme, test each tool | Terminal |
+
+---
+
+## Sensitivity Policy
+
+| Action Type | Policy |
+|---|---|
+| 🟢 Open/read/scroll/search | Auto-execute |
+| 🟡 Type text, tap buttons | Auto-execute in context |
+| 🔴 Pay, submit order, transfer money | **Must confirm** |
+
+---
+
+## End-to-End Flow Example
+
+```
+User: "打开京东搜机械键盘"
+  ↓
+LLM → launch_app(app="京东")         → "京东已打开"
+LLM → wait_for_element(text="搜索")  → "搜索框已出现"
+LLM → tap_screen(text="搜索")        → "已点击搜索框"
+LLM → type_text(text="机械键盘")     → "已输入"
+LLM → press_key(key="enter")         → "已搜索"
+LLM → get_screen_elements()          → [商品列表各个item的坐标和文字]
+LLM → capture_screen(mode="describe") → "页面显示了12个机械键盘商品，价格从89到399..."
+  ↓
+TTS: "京东上搜到12款机械键盘，价格从89到399不等。第一款是..."
+```
+
+---
+
+## Risk Assessment
+
+| Risk | Mitigation |
+|---|---|
+| Accessibility Service config change requires user re-enable | Show a toast guiding user to re-enable |
+| UI tree too large for LLM context | `get_screen_elements` returns only interactive elements, truncated to 30 |
+| App loading too slow before next action | `wait_for_element` with configurable timeout (default 5s) |
+| OCR misreads prices | Use accessibility tree (exact text) over OCR when available — `get_screen_elements` returns text directly |
+| LLM ignores `launch_app`, tries tapping launcher | Keyword routing in system prompt; potential app-level pre-processing (see Issue 1) |
