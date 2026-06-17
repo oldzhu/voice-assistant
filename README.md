@@ -101,6 +101,11 @@
 - **Reading**: `get_screen_elements`, `wait_for_element`, `capture_screen`
 - **Safety**: Payment/transaction actions require explicit user confirmation.
 
+> ⚠️ **Known issues (2025-06-17):**
+> 1. LLM sometimes ignores `launch_app` and tries to find app icons on launcher → says "uninstalled"
+> 2. Complex multi-step flows (search + scroll + find cheapest) may exceed 10-turn limit
+> 3. Accessibility Service must be manually re-enabled after each APK update (new XML flags)
+
 ---
 
 ## 📂 Project Structure / 项目结构
