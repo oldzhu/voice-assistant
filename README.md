@@ -60,7 +60,7 @@
 
 ---
 
-## 🧰 Tools / 工具 (22 total)
+## 🧰 Tools / 工具 (29 total)
 
 | Tool | Description |
 |------|-------------|
@@ -80,12 +80,26 @@
 | `what_do_you_know` | Recall saved memories |
 | `describe_photo` | Take photo → Vision AI description |
 | `capture_screen` | Screenshot → OCR text extraction + visual description |
+| `launch_app` 🆕 | Open any app by name (京东、微信、淘宝…) |
+| `tap_screen` 🆕 | Tap screen by coordinates or text match |
+| `type_text` 🆕 | Enter text into focused input field |
+| `swipe_screen` 🆕 | Scroll/swipe (up/down/left/right) |
+| `press_key` 🆕 | System navigation keys (back/home/recents) |
+| `get_screen_elements` 🆕 | List interactive UI elements with positions |
+| `wait_for_element` 🆕 | Wait until specific text appears on screen |
 | `update_config` | Change settings at runtime |
 | `set_speech_rate` | Adjust TTS speed |
 | `set_barge_in_mode` | Toggle interrupt mode (off/on/keyword) |
 | `stop_listening` | Enter DORMANT state |
 | `start_listening` | Exit DORMANT state |
 | `clear_history` | Reset conversation history |
+
+### 🆕 App Control (NEW) / 应用操控
+猪头助手 can now control other apps on your phone using AccessibilityService gestures.
+- **Navigation**: `launch_app`, `press_key`
+- **Touch**: `tap_screen`, `swipe_screen`, `type_text`
+- **Reading**: `get_screen_elements`, `wait_for_element`, `capture_screen`
+- **Safety**: Payment/transaction actions require explicit user confirmation.
 
 ---
 

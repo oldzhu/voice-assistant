@@ -53,6 +53,13 @@ import com.example.voiceassistant.tools.PlayMediaTool
 import com.example.voiceassistant.tools.SwarmTool
 import com.example.voiceassistant.tools.DescribeImageTool
 import com.example.voiceassistant.tools.ScreenCaptureTool
+import com.example.voiceassistant.tools.LaunchAppTool
+import com.example.voiceassistant.tools.PressKeyTool
+import com.example.voiceassistant.tools.ScreenTapTool
+import com.example.voiceassistant.tools.TypeTextTool
+import com.example.voiceassistant.tools.SwipeScreenTool
+import com.example.voiceassistant.tools.ScreenElementsTool
+import com.example.voiceassistant.tools.WaitForElementTool
 import com.example.voiceassistant.skill.SkillRegistry
 import com.example.voiceassistant.skill.SkillExecutor
 import com.example.voiceassistant.skill.builtin.MorningRoutineSkill
@@ -357,6 +364,16 @@ class VoiceService : Service(), LifecycleOwner {
                     { this@VoiceService },
                     { visionProvider }
                 ))
+                // App control: launch + navigation
+                register(LaunchAppTool { this@VoiceService })
+                register(PressKeyTool())
+                // App control: touch interaction
+                register(ScreenTapTool())
+                register(TypeTextTool())
+                register(SwipeScreenTool())
+                // App control: screen reading
+                register(ScreenElementsTool())
+                register(WaitForElementTool())
             }
             // L3: restore previously-generated tools (after toolRegistry is assigned)
             createTool.restoreFromDisk()

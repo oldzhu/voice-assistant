@@ -23,7 +23,7 @@ import kotlinx.coroutines.coroutineScope
 class ToolCallEngine(
     private val llmBackend: CloudLLMBackend,
     private val toolRegistry: ToolRegistry,
-    private val maxTurns: Int = 5
+    private val maxTurns: Int = 10
 ) {
     companion object {
         private const val TAG = "ToolCallEngine"
@@ -142,7 +142,7 @@ class ToolCallEngine(
 
         // Max turns exceeded — give a graceful fallback
         Log.w(TAG, "Max turns ($maxTurns) exceeded")
-        return Result.success("处理稍微复杂了点，请换个方式再说一遍")
+        return Result.success("操作步骤有点多，请换个更简单的说法再试")
     }
 
     /**
@@ -159,7 +159,12 @@ class ToolCallEngine(
         // ═══════════════════════════════════════════════════════════════
         // KEYWORD ROUTING PRIORITY — must come BEFORE general tool guidance
         // ═══════════════════════════════════════════════════════════════
-        append("【关键词路由 - 最高优先级】以下任一关键词出现时，用户想的是「识别手机当前屏幕」，NOT 搜索互联网：")
+        append("【关键词路由 - 最高优先级】以下任一关键词出现时，用户想的是「打开/操控手机应用」，NOT 聊天或搜索：")
+        append("「打开XX」「启动XX」「进XX」「帮我打开XX」「搜一下XX」「在XX里搜」「帮我搜XX」")
+        append("看到这些词 → 立即调用 launch_app，绝对不要用文字回复说「请打开XX」或「应用未安装」！")
+        append("同时也必须遵守「应用操控」规则：不要在桌面上找图标点图标，直接用 launch_app。")
+
+        append("【关键词路由】以下任一关键词出现时，用户想的是「识别手机当前屏幕」，NOT 搜索互联网：")
         append("「这一页」「当前页面」「正在看的」「屏幕上的」「截屏」「帮我看看这页」「总结这页」「提取这页」「这页在说什么」")
         append("看到这些词 → 立即调用 capture_screen，绝对不要调用 web_search、web_fetch 或任何搜索工具！")
 
@@ -185,6 +190,33 @@ class ToolCallEngine(
         append("capture_screen 的 mode 参数：用户说「总结」「描述」时用 describe，" +
             "说「提取文字」「文字」时用 text，说「看看」「看一下」时用 full。" +
             "第一次使用会弹出系统「录制或投放」权限框，需选择「整个屏幕」并点「立即开始」。授权后有3秒倒计时让用户切回目标app。")
+
+        // ═══════════════════════════════════════════════════════════════
+        // APP CONTROL — controlling other apps on the phone
+        // ═══════════════════════════════════════════════════════════════
+        append("【应用操控 - 关键规则】你可以代替用户操作手机上的其他应用。")
+        append("★ launch_app 通过系统直接启动应用，不需要在桌面上找图标！打开应用一律用 launch_app，绝对不要用 tap_screen 去点图标。")
+        append("★ 高效操作流程（尽量在5步内完成）：")
+        append("  1. launch_app(app=\"京东\") → 系统直接打开app")
+        append("  2. 等1-2秒让app加载 → 直接 tap_screen(text=\"搜索\") 点击搜索框")
+        append("  3. type_text(text=\"关键词\") → 输入搜索内容")
+        append("  4. tap_screen(text=\"搜索\") 或 press_key → 触发搜索")
+        append("  5. capture_screen(mode=describe) → 截屏看结果总结给用户")
+        append("★ 关键：不要每一步都先调 get_screen_elements 或 wait_for_element，直接按经验操作，失败后再用 get_screen_elements 查看。")
+        append("★ 搜索时 type_text 之后用 tap_screen(text=\"搜索\") 点搜索按钮，不要用 press_key 按回车（很多app回车不触发搜索）。")
+        append("★ 浏览内容时（如看微信消息），先用 get_screen_elements 了解布局，再精准操作。")
+
+        // ═══════════════════════════════════════════════════════════════
+        // SENSITIVITY GATE — payment and transaction safety
+        // ═══════════════════════════════════════════════════════════════
+        append("【敏感操作 - 必须用户确认】以下操作绝对不能自行执行，必须先征得用户同意：")
+        append("支付、付款、转账、下单、确认购买、提交订单、输入支付密码、确认收货。")
+        append("当用户要求你进行这些操作时，你必须：")
+        append("1. 先用工具查看页面（get_screen_elements 或 capture_screen）")
+        append("2. 口头告知用户：商品名、金额、商家")
+        append("3. 明确询问「要帮你确认吗？」")
+        append("4. 只有用户明确回复「确认」「好的」「可以」「行」后才能执行")
+        append("搜索商品、查看详情、加购物车、看价格、浏览评价 → 这些是安全的，可以直接执行。")
 
         // Self-improvement: L2 — configuration
         append("你可以通过 update_config 工具记住用户偏好。")
